@@ -59,16 +59,21 @@ object ShizukuInstaller {
             return@withContext InstallResult(false, false, "Bundled Shizuku APK rejected: $verification")
         }
 
-        if (PrivilegeManager.canModify()) {
+        // A privileged shell can install without any tap; if that does not land, the user
+        // still gets the system installer instead of a dead end.
+        val silentAttempt = if (PrivilegeManager.canModify()) {
             val command = "pm install -r \"${staged.absolutePath}\""
-            val result = PrivilegeManager.shell().exec(command, 180_000)
-            val installedNow = isInstalled(context)
-            val message = when {
-                installedNow -> "Shizuku $VERSION installed silently through the privileged shell."
-                result.success -> "The shell reported success but Shizuku is not visible yet. Open the app list and refresh."
-                else -> "Silent install failed: ${result.output.take(300).ifBlank { "exit ${result.exitCode}" }}"
-            }
-            return@withContext InstallResult(installedNow, false, message)
+            PrivilegeManager.shell().exec(command, 180_000)
+        } else {
+            null
+        }
+
+        if (silentAttempt != null && isInstalled(context)) {
+            return@withContext InstallResult(
+                installed = true,
+                installerShown = false,
+                message = "Shizuku $VERSION installed silently through the privileged shell.",
+            )
         }
 
         val uri = runCatching {
@@ -93,7 +98,14 @@ object ShizukuInstaller {
         InstallResult(
             installed = false,
             installerShown = true,
-            message = "Confirm the install in the system dialog, then open Shizuku and start the service.",
+            message = buildString {
+                if (silentAttempt != null) {
+                    append("Silent install did not complete (")
+                    append(silentAttempt.output.take(160).ifBlank { "exit ${silentAttempt.exitCode}" })
+                    append("). ")
+                }
+                append("Confirm the install in the system dialog, then open Shizuku and start the service.")
+            },
         )
     }
 
