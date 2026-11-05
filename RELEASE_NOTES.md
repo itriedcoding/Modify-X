@@ -1,39 +1,38 @@
-## Modify-X — Android debloater
+# Modify-X 1.1.0
 
-A local, verified Android debloater. Install the APK below and grant root or Shizuku
-access to change packages; without either, the app is read-only by design.
+Shizuku can now be installed from inside the app, and three new per-app controls join the
+existing debloat actions.
 
-### Highlights
+## New in 1.1.0
 
-- **Real debloating with verification.** Every command is executed through `su` or a
-  Shizuku-provided shell user service, then the device state is re-read. If the state did
-  not actually change, the action is reported as failed.
-- **Removed apps stay visible and restorable.** The package list is diffed against
-  `pm list packages -u` so anything uninstalled for user 0 can be found and brought back.
-- **~190 curated bloatware packages** across Google, Samsung, Xiaomi, OPPO/Realme/OnePlus,
-  Vivo, Huawei/Honor, Motorola, carriers and telemetry agents — each with a risk rating
-  and a note, filtered to what is installed on your device.
-- **Protected core packages** (SystemUI, telephony, package installer, launchers, WebView)
-  are blocked unless you explicitly enable the override.
-- **Batch actions** — uninstall, disable, restore, enable — with per-item progress.
-- **Profiles and boot automation** to re-apply a chosen set after a reboot.
-- **Backups** as portable JSON, local snapshots, and restore of exactly the packages a
-  backup says were removed.
-- **History with undo** for every reversible action.
-- **App inspector**: permissions with grant state, component counts, signing-certificate
-  SHA-256, APK paths, running processes, and data size where root allows it.
-- **Shell console** for arbitrary commands against the active backend.
+- **One-tap Shizuku setup.** The official Shizuku 13.6.0 APK is bundled, so installing it
+  needs no network access and no browser. The installer verifies the APK checksum and the
+  Rikka signing certificate before doing anything. With root the install is silent; without
+  root the system installer opens with a single confirmation. A "Grant Shizuku" action
+  follows once the service is running.
+- **Component control.** Every activity, service, receiver and provider of a package can be
+  enabled or disabled individually (`pm enable/disable pkg/component`), with the resulting
+  state read back from the platform.
+- **Runtime permissions.** Dangerous permissions can be granted or revoked
+  (`pm grant` / `pm revoke`) and are re-checked afterwards.
+- **App standby buckets.** Read and set the bucket (`am get/set-standby-bucket`) from
+  Exempted down to Never, so a debloated app can also be stopped from waking the device.
+- **Automation that finishes.** Boot automation now runs as WorkManager work instead of
+  inside a broadcast receiver, so a large profile is no longer cut off after a few seconds.
+  A "Run automation now" action was added to Presets.
+- **Runs on older Android.** Package queries used API 33-only overloads and would have
+  crashed on Android 8–12; both paths are now version-guarded.
+- **Navigation fixes.** Console and Backup screens have a back button; the duplicate
+  Play Books catalog entry is gone.
 
-### Requirements
+## Install
 
-- Android 8.0 (API 26) or newer.
-- Root **or** [Shizuku](https://shizuku.rikka.app/) running with permission granted for
-  any package modification.
+Download `app-release.apk` and allow installation for your file manager. Root (Magisk,
+KernelSU) or Shizuku is required for any change; without either the app is read-only.
 
-### Notes
+## Notes
 
-- The app requests no network permission. Nothing leaves the device.
-- Release APKs are signed with the project key in `keystore/modifyx-release.jks` so
-  future versions install as updates.
-- `pm uninstall --user 0` is reversible and is the default removal mode. "Uninstall
-  completely" exists only for non-system apps and is destructive.
+- Uninstall uses `pm uninstall --user 0`, so packages can be restored from History.
+- Backups contain package names and states only. The app has no network permission.
+- The release keystore is committed on purpose: every build is signed with the same key so
+  updates install over each other.

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -40,7 +41,7 @@ import dev.modifyx.ui.components.SectionCard
 import dev.modifyx.ui.formatDateTime
 
 @Composable
-fun BackupScreen(vm: MainViewModel) {
+fun BackupScreen(vm: MainViewModel, onBack: () -> Unit) {
     val snapshots = vm.snapshots
     val preview = vm.importPreview
     var pendingDelete by remember { mutableStateOf<dev.modifyx.data.SnapshotFile?>(null) }
@@ -59,7 +60,10 @@ fun BackupScreen(vm: MainViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Backup & restore", style = MaterialTheme.typography.headlineSmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+            Text("Backup & restore", style = MaterialTheme.typography.headlineSmall)
+        }
         Text(
             "A snapshot records which packages are installed, removed or disabled, so the same debloat state can be rebuilt after a factory reset or on another device.",
             style = MaterialTheme.typography.bodySmall,

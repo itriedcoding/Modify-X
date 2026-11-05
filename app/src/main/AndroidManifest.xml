@@ -13,6 +13,14 @@
     <!-- Shizuku hands out a privileged shell to apps holding this permission. -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
+    <!-- Installing the bundled Shizuku APK; the app itself never touches the network. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- WorkManager declares this for network constraints, which this app never uses. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove" />
+
     <application
         android:name=".ModifyXApp"
         android:allowBackup="false"
@@ -53,6 +61,17 @@
         <service
             android:name=".core.UserService"
             android:exported="false" />
+
+        <!-- Hands the staged Shizuku APK to the system installer with a read grant. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- Shizuku API bridge. The authority must stay "${applicationId}.shizuku". -->
         <provider

@@ -3,7 +3,7 @@
 An Android debloater that shows you exactly what it is doing, executes real platform
 commands, and verifies that each change actually happened.
 
-No accounts, no network permission, no ads, no analytics, no fake data.
+No accounts, no INTERNET permission, no ads, no analytics, no fake data.
 
 ## What it does
 
@@ -18,6 +18,20 @@ privileged shell. Two backends are supported:
 Without one of those, the app runs read-only: it can still list, search and inspect
 every installed package, but it refuses to touch anything instead of pretending.
 
+## Shizuku setup without a browser
+
+The official **Shizuku 13.6.0** APK is bundled inside Modify-X, so setting up Shizuku
+needs no network access and no third-party app store:
+
+- The Home tab offers **Install Shizuku** whenever Shizuku is missing.
+- Before installing, the APK must match its pinned SHA-256 **and** the Rikka release
+  signing certificate; anything else is refused.
+- With root the install runs silently (`pm install`); without root the system installer
+  opens with one confirmation.
+- A unit test fails the build if the bundled asset ever changes.
+
+See [THIRD_PARTY.md](THIRD_PARTY.md) for provenance and the Apache-2.0 attribution.
+
 ## Features
 
 - **Full package inventory** read from `PackageManager`: label, package name, icon,
@@ -29,20 +43,27 @@ every installed package, but it refuses to touch anything instead of pretending.
 - **Verified actions.** Every command's exit code is checked *and* the resulting device
   state is re-read. A `pm uninstall --user 0` that returns 0 but leaves the package
   installed is reported as a failure, not a success.
-- **Curated bloatware catalog** (~190 known packages across Google, Samsung, Xiaomi,
+- **Curated bloatware catalog** (208 packages across Google, Samsung, Xiaomi,
   OPPO/Realme/OnePlus, Vivo, Huawei/Honor, Motorola, carriers and telemetry agents)
   with per-package risk levels and notes, filtered to what is actually installed.
 - **Protection guards.** Core Android packages (SystemUI, telephony, package installer,
   launchers, WebView, …) are blocked by default. Risky catalog entries need an explicit
   opt-in. The override lives in Settings and is off out of the box.
 - **Batch operations** with progress: uninstall for user, disable, restore, enable.
+- **Component control.** Browse every activity, service, receiver and provider of a
+  package and disable or enable it individually (`pm enable/disable pkg/component`),
+  with the new state read back from the package manager.
+- **Runtime permissions.** Dangerous permissions can be granted or revoked
+  (`pm grant` / `pm revoke`) and are re-checked afterwards.
+- **App standby buckets.** Read and set the background bucket
+  (`am get/set-standby-bucket`) from Exempted to Never.
 - **Per-app detail view**: declared permissions and their grant state, component counts,
   signing-certificate SHA-256, APK paths, running processes, and app data/cache size
   (root only — the adb shell cannot read other apps' private directories).
-- **Profiles**: apply a whole preset group at once, or save your own selection in the
-  Apps tab as a reusable profile.
-- **Boot automation**: re-apply a chosen profile after every reboot, using the same
-  verified pipeline.
+- **Profiles**: apply a whole preset group at once, save your own selection, or run the
+  automation profile immediately instead of waiting for a reboot.
+- **Boot automation** that survives long batches: the profile is applied by WorkManager
+  after boot, not inside a broadcast receiver's short window.
 - **Backups**: export/import JSON snapshots of the debloat state, keep local snapshots,
   and restore exactly the packages a backup says were removed.
 - **History with undo**: every action is logged with its command, exit status and
@@ -66,6 +87,18 @@ every installed package, but it refuses to touch anything instead of pretending.
 Debloating can break features you rely on. If something stops working, open History and
 undo, or use a backup to restore.
 
+## Permissions
+
+| Permission | Why |
+| --- | --- |
+| `QUERY_ALL_PACKAGES` | Listing the full package inventory is the point of the app |
+| `RECEIVE_BOOT_COMPLETED` | Re-applying the automation profile after a reboot |
+| `REQUEST_INSTALL_PACKAGES` | Installing the bundled Shizuku APK |
+| `moe.shizuku.manager.permission.API_V23` | Talking to a running Shizuku service |
+
+`WAKE_LOCK` and `FOREGROUND_SERVICE` are contributed by WorkManager so deferred work
+can finish. There is no `INTERNET` permission.
+
 ## Building
 
 Requirements: JDK 17, Android SDK with platform 36 and build-tools 36.0.0.
@@ -87,9 +120,10 @@ your own distribution.
 
 ```
 app/src/main/java/dev/modifyx/
-├── core/       privilege detection, root/Shizuku/unprivileged shells, boot receiver
-├── data/       package repository, catalog, action engine, history, profiles, backups
+├── core/       privilege detection, root/Shizuku shells, Shizuku installer, automation worker
+├── data/       package repository, catalog, actions, controls, history, profiles, backups
 └── ui/         Compose theme, view model, screens
+app/src/main/assets/shizuku.apk   bundled, checksum-pinned Shizuku release
 ```
 
 The data layer never fabricates values: if the platform cannot supply something (for
@@ -97,4 +131,5 @@ example app data size without root), the UI says so instead of showing a placeho
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). Bundled Shizuku is Apache-2.0; see
+[THIRD_PARTY.md](THIRD_PARTY.md).

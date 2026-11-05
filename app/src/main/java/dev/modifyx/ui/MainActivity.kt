@@ -38,6 +38,7 @@ import dev.modifyx.ui.components.BusyDialog
 import dev.modifyx.ui.screens.AppDetailScreen
 import dev.modifyx.ui.screens.AppsScreen
 import dev.modifyx.ui.screens.BackupScreen
+import dev.modifyx.ui.screens.ComponentsScreen
 import dev.modifyx.ui.screens.ConsoleScreen
 import dev.modifyx.ui.screens.HistoryScreen
 import dev.modifyx.ui.screens.HomeScreen
@@ -70,8 +71,11 @@ object Routes {
     const val CONSOLE = "console"
     const val BACKUP = "backup"
     const val DETAIL = "detail/{package}"
+    const val COMPONENTS = "components/{package}"
 
     fun detail(pkg: String): String = "detail/${Uri.encode(pkg)}"
+
+    fun components(pkg: String): String = "components/${Uri.encode(pkg)}"
 }
 
 private data class BottomDestination(val route: String, val label: String, val icon: ImageVector)
@@ -143,14 +147,34 @@ private fun AppRoot(vm: MainViewModel) {
                     onOpenBackup = { navController.navigate(Routes.BACKUP) },
                 )
             }
-            composable(Routes.CONSOLE) { ConsoleScreen(vm) }
-            composable(Routes.BACKUP) { BackupScreen(vm) }
+            composable(Routes.CONSOLE) {
+                ConsoleScreen(vm = vm, onBack = { navController.popBackStack() })
+            }
+            composable(Routes.BACKUP) {
+                BackupScreen(vm = vm, onBack = { navController.popBackStack() })
+            }
             composable(
                 route = Routes.DETAIL,
                 arguments = listOf(navArgument("package") { type = NavType.StringType }),
             ) { entry ->
                 val pkg = Uri.decode(entry.arguments?.getString("package").orEmpty())
-                AppDetailScreen(vm = vm, packageName = pkg, onBack = { navController.popBackStack() })
+                AppDetailScreen(
+                    vm = vm,
+                    packageName = pkg,
+                    onBack = { navController.popBackStack() },
+                    onOpenComponents = { navController.navigate(Routes.components(pkg)) },
+                )
+            }
+            composable(
+                route = Routes.COMPONENTS,
+                arguments = listOf(navArgument("package") { type = NavType.StringType }),
+            ) { entry ->
+                val pkg = Uri.decode(entry.arguments?.getString("package").orEmpty())
+                ComponentsScreen(
+                    vm = vm,
+                    packageName = pkg,
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
     }

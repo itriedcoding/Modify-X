@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -19,11 +20,13 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +44,7 @@ import dev.modifyx.core.PrivilegeMode
 import dev.modifyx.data.AppEntry
 import dev.modifyx.data.DebloatAction
 import dev.modifyx.data.BloatCatalog
+import dev.modifyx.data.StandbyBucket
 import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.AppIcon
 import dev.modifyx.ui.components.Badge
@@ -58,6 +62,7 @@ fun AppDetailScreen(
     vm: MainViewModel,
     packageName: String,
     onBack: () -> Unit,
+    onOpenComponents: () -> Unit,
 ) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val privileges by vm.privileges.collectAsStateWithLifecycle()
@@ -66,7 +71,10 @@ fun AppDetailScreen(
     var confirm by remember { mutableStateOf<DebloatAction?>(null) }
     var permissionsExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(packageName) { vm.openDetails(packageName) }
+    LaunchedEffect(packageName) {
+        vm.openDetails(packageName)
+        vm.loadStandby(packageName)
+    }
     DisposableEffect(packageName) { onDispose { vm.closeDetails() } }
 
     val busy = vm.busy
@@ -260,6 +268,8 @@ fun AppDetailScreen(
                 KeyValueRow("Services", info.services.toString())
                 KeyValueRow("Receivers", info.receivers.toString())
                 KeyValueRow("Providers", info.providers.toString())
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onOpenComponents) { Text("Manage components") }
             }
 
             SectionCard(title = "Permissions (${info.permissions.size})") {
@@ -294,6 +304,11 @@ fun AppDetailScreen(
                                 if (permission.granted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                                 if (permission.granted) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            if (permission.dangerous && privileges.canModify) {
+                                TextButton(
+                                    onClick = { vm.setPermission(packageName, permission.name, !permission.granted) },
+                                ) { Text(if (permission.granted) "Revoke" else "Grant") }
+                            }
                         }
                     }
                     if (info.permissions.size > 6) {
@@ -305,6 +320,37 @@ fun AppDetailScreen(
                             Spacer(Modifier.width(6.dp))
                             Text(if (permissionsExpanded) "Show less" else "Show all ${info.permissions.size}")
                         }
+                    }
+                }
+            }
+
+            SectionCard(
+                title = "Background",
+                subtitle = "App standby bucket decides when the system lets it run",
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        vm.standby?.let { "${it.label} — ${it.blurb}" }
+                            ?: if (privileges.canModify) "Reading the bucket…" else "Needs root or Shizuku.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { vm.loadStandby(packageName) }) { Text("Refresh") }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    StandbyBucket.entries.forEach { bucket ->
+                        FilterChip(
+                            selected = vm.standby == bucket,
+                            enabled = enabled && entry.installedForUser,
+                            onClick = { vm.setStandby(packageName, bucket) },
+                            label = { Text(bucket.label) },
+                        )
                     }
                 }
             }

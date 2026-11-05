@@ -31,11 +31,7 @@ class PackageRepository(private val context: Context) {
         val meta = readMeta()
 
         val packages = runCatching {
-            pm.getInstalledPackages(
-                PackageManager.PackageInfoFlags.of(
-                    (PackageManager.GET_PERMISSIONS or PackageManager.MATCH_DISABLED_COMPONENTS).toLong(),
-                ),
-            )
+            installedPackages(PackageManager.GET_PERMISSIONS or PackageManager.MATCH_DISABLED_COMPONENTS)
         }.getOrElse {
             return@withContext AppSnapshot(
                 privileged = privileged,
@@ -112,7 +108,7 @@ class PackageRepository(private val context: Context) {
             installedForUser = true,
             suspended = runCatching { pm.isPackageSuspended(packageName) }.getOrDefault(false),
             versionName = versionName,
-            versionCode = longVersionCode,
+            versionCode = versionCodeCompat(),
             targetSdk = appInfo.targetSdkVersion,
             minSdk = appInfo.minSdkVersion,
             firstInstallTime = firstInstallTime,
@@ -154,17 +150,15 @@ class PackageRepository(private val context: Context) {
         .toSet()
 
     suspend fun loadDetails(pkg: String): AppDetails? = withContext(Dispatchers.IO) {
-        val flags = PackageManager.PackageInfoFlags.of(
-            (
-                PackageManager.GET_PERMISSIONS or
-                    PackageManager.GET_ACTIVITIES or
-                    PackageManager.GET_SERVICES or
-                    PackageManager.GET_RECEIVERS or
-                    PackageManager.GET_PROVIDERS or
-                    PackageManager.MATCH_DISABLED_COMPONENTS
-                ).toLong(),
-        )
-        val info = runCatching { pm.getPackageInfo(pkg, flags) }.getOrNull() ?: return@withContext null
+        val info = queryPackage(
+            pkg,
+            PackageManager.GET_PERMISSIONS or
+                PackageManager.GET_ACTIVITIES or
+                PackageManager.GET_SERVICES or
+                PackageManager.GET_RECEIVERS or
+                PackageManager.GET_PROVIDERS or
+                PackageManager.MATCH_DISABLED_COMPONENTS,
+        ) ?: return@withContext null
         val appInfo = info.applicationInfo ?: return@withContext null
 
         val permissions = info.requestedPermissions?.map { name ->
@@ -237,6 +231,28 @@ class PackageRepository(private val context: Context) {
             .digest(bytes)
             .joinToString(":") { "%02X".format(it) }
     }.getOrNull()
+
+    /** The flag-based overloads only exist from API 33; older releases need the int form. */
+    fun queryPackage(pkg: String, flags: Int): PackageInfo? = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(flags.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(pkg, flags)
+        }
+    }.getOrNull()
+
+    private fun installedPackages(flags: Int): List<PackageInfo> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(flags.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getInstalledPackages(flags)
+        }
+
+    @Suppress("DEPRECATION")
+    private fun PackageInfo.versionCodeCompat(): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) longVersionCode else versionCode.toLong()
 
     fun iconFor(pkg: String): ImageBitmap? {
         iconCache.get(pkg)?.let { return it }

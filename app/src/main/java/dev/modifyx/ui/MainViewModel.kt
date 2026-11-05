@@ -8,11 +8,15 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.modifyx.container
+import dev.modifyx.core.BootProfileReceiver
 import dev.modifyx.core.PrivilegeManager
+import dev.modifyx.core.ShizukuInstaller
 import dev.modifyx.data.AppEntry
 import dev.modifyx.data.AppFilter
 import dev.modifyx.data.AppSettings
 import dev.modifyx.data.AppSnapshot
+import dev.modifyx.data.ComponentRow
+import dev.modifyx.data.StandbyBucket
 import dev.modifyx.data.BackupDocument
 import dev.modifyx.data.BackupManager
 import dev.modifyx.data.BloatCatalog
@@ -82,6 +86,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var console by mutableStateOf(ConsoleState())
         private set
 
+    var shizukuInstallBusy by mutableStateOf(false)
+        private set
+    var shizukuMessage by mutableStateOf<String?>(null)
+        private set
+
+    var components by mutableStateOf<List<ComponentRow>>(emptyList())
+        private set
+    var componentsLoading by mutableStateOf(false)
+        private set
+    var componentBusy by mutableStateOf<String?>(null)
+        private set
+
+    var standby by mutableStateOf<StandbyBucket?>(null)
+        private set
+
     init {
         viewModelScope.launch {
             container.history.ensureLoaded()
@@ -112,6 +131,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!PrivilegeManager.requestShizukuPermission()) {
             notice = "Shizuku is not running. Start the Shizuku service, then re-detect."
         }
+    }
+
+    // --- Shizuku setup ---
+
+    fun installShizuku() {
+        if (shizukuInstallBusy) return
+        viewModelScope.launch {
+            shizukuInstallBusy = true
+            val result = ShizukuInstaller.install(getApplication())
+            shizukuInstallBusy = false
+            shizukuMessage = result.message
+            PrivilegeManager.refresh()
+        }
+    }
+
+    fun openShizuku() {
+        if (!ShizukuInstaller.open(getApplication())) {
+            shizukuMessage = "Shizuku is not installed yet, so there is nothing to open."
+        }
+    }
+
+    fun dismissShizukuMessage() {
+        shizukuMessage = null
     }
 
     private suspend fun reloadAfterChange() {
@@ -254,6 +296,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun closeDetails() {
         details = null
+        components = emptyList()
+        standby = null
+    }
+
+    // --- component, permission and background controls ---
+
+    fun loadComponents(pkg: String) {
+        viewModelScope.launch {
+            componentsLoading = true
+            components = container.controls.components(pkg)
+            componentsLoading = false
+        }
+    }
+
+    fun toggleComponent(pkg: String, component: String, enable: Boolean) {
+        if (componentBusy != null) return
+        viewModelScope.launch {
+            componentBusy = component
+            val result = container.controls.setComponent(pkg, component, enable)
+            componentBusy = null
+            notice = result.message
+            components = container.controls.components(pkg)
+            snapshot = container.repository.loadSnapshot()
+        }
+    }
+
+    fun setPermission(pkg: String, permission: String, grant: Boolean) {
+        viewModelScope.launch {
+            val result = container.controls.setPermission(pkg, permission, grant)
+            notice = result.message
+            details = container.repository.loadDetails(pkg)
+            snapshot = container.repository.loadSnapshot()
+        }
+    }
+
+    fun loadStandby(pkg: String) {
+        viewModelScope.launch { standby = container.controls.standbyBucket(pkg) }
+    }
+
+    fun setStandby(pkg: String, bucket: StandbyBucket) {
+        viewModelScope.launch {
+            val result = container.controls.setStandbyBucket(pkg, bucket)
+            notice = result.message
+            standby = container.controls.standbyBucket(pkg)
+        }
     }
 
     fun entryFor(pkg: String): AppEntry? = snapshot.apps.firstOrNull { it.packageName == pkg }
@@ -320,6 +407,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAutoApplyProfile(id: String?) {
         viewModelScope.launch { container.settings.setAutoApplyProfile(id) }
+    }
+
+    /** Queues the automation run now instead of waiting for the next reboot. */
+    fun runAutomationNow() {
+        BootProfileReceiver.enqueue(getApplication(), delaySeconds = 0L)
+        notice = "Automation queued. Results appear in History."
     }
 
     // --- settings ---

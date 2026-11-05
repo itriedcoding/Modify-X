@@ -13,9 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -34,7 +38,7 @@ import dev.modifyx.ui.components.SectionCard
 import dev.modifyx.ui.formatDuration
 
 @Composable
-fun ConsoleScreen(vm: MainViewModel) {
+fun ConsoleScreen(vm: MainViewModel, onBack: () -> Unit) {
     val privileges by vm.privileges.collectAsStateWithLifecycle()
     val console = vm.console
     var command by remember { mutableStateOf("pm list packages -3") }
@@ -47,7 +51,10 @@ fun ConsoleScreen(vm: MainViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Shell console", style = MaterialTheme.typography.headlineSmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+            Text("Shell console", style = MaterialTheme.typography.headlineSmall)
+        }
         Text(
             "Commands run through ${privileges.summary}. The exit code and raw output are shown unchanged.",
             style = MaterialTheme.typography.bodySmall,

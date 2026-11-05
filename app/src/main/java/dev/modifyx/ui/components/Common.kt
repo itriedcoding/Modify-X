@@ -37,8 +37,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.Button
 import dev.modifyx.core.PrivilegeMode
 import dev.modifyx.core.PrivilegeState
+import dev.modifyx.core.ShizukuInstaller
 import dev.modifyx.data.PackageRepository
 import dev.modifyx.data.RiskLevel
 import kotlinx.coroutines.Dispatchers
@@ -244,6 +246,79 @@ fun PrivilegeCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ShizukuSetupCard(
+    state: PrivilegeState,
+    busy: Boolean,
+    message: String?,
+    onInstall: () -> Unit,
+    onOpen: () -> Unit,
+    onGrant: () -> Unit,
+    onDetect: () -> Unit,
+    onDismissMessage: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SectionCard(title = "Shizuku", modifier = modifier) {
+        when {
+            !state.shizukuInstalled -> {
+                Text(
+                    "Shizuku provides an adb-level shell without root. Modify-X bundles Shizuku " +
+                        "${ShizukuInstaller.VERSION} (Apache-2.0), so your phone never downloads it.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = onInstall, enabled = !busy) {
+                    Text(if (busy) "Installing…" else "Install Shizuku")
+                }
+                if (busy) {
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+
+            !state.shizukuRunning -> {
+                Text(
+                    "Shizuku ${state.shizukuVersion ?: ""} is installed, but its service is not running. " +
+                        "Open Shizuku and start it with root or wireless debugging, then re-detect.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onOpen) { Text("Open Shizuku") }
+                    OutlinedButton(onClick = onDetect) { Text("Re-detect") }
+                }
+            }
+
+            !state.shizukuGranted -> {
+                Text(
+                    "Shizuku is running. Grant access so Modify-X can use its shell.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = onGrant) { Text("Grant access") }
+            }
+
+            else -> Text(
+                "Shizuku is connected and serving commands.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        if (message != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = onDismissMessage) { Text("Dismiss") }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "The bundled APK must match its pinned checksum and Rikka's signing certificate before it is installed.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

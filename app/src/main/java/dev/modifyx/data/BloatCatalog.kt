@@ -78,7 +78,6 @@ object BloatCatalog {
         CatalogEntry("com.google.android.gsf", CatalogGroup.GOOGLE, RiskLevel.RISKY, "Google Services Framework; part of the Google stack"),
         CatalogEntry("com.google.android.apps.play.games", CatalogGroup.GOOGLE, RiskLevel.SAFE, "Play Games"),
         CatalogEntry("com.google.android.play.games", CatalogGroup.GOOGLE, RiskLevel.SAFE, "Play Games"),
-        CatalogEntry("com.google.android.apps.books", CatalogGroup.GOOGLE, RiskLevel.SAFE, "Play Books"),
 
         // ---------- Samsung ----------
         CatalogEntry("com.samsung.android.bixby.agent", CatalogGroup.SAMSUNG, RiskLevel.SAFE, "Bixby voice assistant"),

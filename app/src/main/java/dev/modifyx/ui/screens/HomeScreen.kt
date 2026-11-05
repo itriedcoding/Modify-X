@@ -34,6 +34,7 @@ import dev.modifyx.data.DebloatAction
 import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.PrivilegeCard
 import dev.modifyx.ui.components.SectionCard
+import dev.modifyx.ui.components.ShizukuSetupCard
 import dev.modifyx.ui.components.StatTile
 import dev.modifyx.ui.formatAgo
 import dev.modifyx.ui.formatBytes
@@ -76,6 +77,19 @@ fun HomeScreen(
             onDetect = vm::detectPrivileges,
             onRequestShizuku = vm::requestShizukuPermission,
         )
+
+        if (!privileges.shizukuGranted) {
+            ShizukuSetupCard(
+                state = privileges,
+                busy = vm.shizukuInstallBusy,
+                message = vm.shizukuMessage,
+                onInstall = vm::installShizuku,
+                onOpen = vm::openShizuku,
+                onGrant = vm::requestShizukuPermission,
+                onDetect = vm::detectPrivileges,
+                onDismissMessage = vm::dismissShizukuMessage,
+            )
+        }
 
         SectionCard(title = "Device overview") {
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
