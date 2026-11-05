@@ -3,6 +3,7 @@ package dev.modifyx.ui
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -11,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import dev.modifyx.container
 import dev.modifyx.core.UpdateChecker
 import dev.modifyx.data.AppSettings
+import dev.modifyx.data.AutoScanPolicy
 import dev.modifyx.data.CleanupReport
 import dev.modifyx.data.CustomTheme
 import dev.modifyx.data.DeleteTarget
@@ -35,6 +37,7 @@ data class ScanProgress(
 )
 
 private const val AUTO_UPDATE_INTERVAL_MS = 12L * 60 * 60 * 1000
+private const val AUTO_SCAN_GUARD_MS = 60_000L
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -70,6 +73,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     private val cancelRequested = AtomicBoolean(false)
+    private var lastAutoScanAttempt = 0L
 
     init {
         viewModelScope.launch {
@@ -89,12 +93,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val persisted = runCatching { resolver.takePersistableUriPermission(uri, flags) }.isSuccess
         viewModelScope.launch {
             container.settings.addScanRoot(uri.toString())
-            refreshRoots(container.settings.settings.first().scanRoots)
+            val current = container.settings.settings.first()
+            refreshRoots(current.scanRoots)
             notice = if (persisted) {
                 "Folder added. Its files are readable and deletable while this grant lasts."
             } else {
                 "Folder added, but Android did not persist the permission. Re-add it if a scan fails."
             }
+            if (current.onboardingDone && current.autoScan) startScan(auto = true)
         }
     }
 
@@ -124,7 +130,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- scanning ---
 
-    fun startScan() {
+    fun startScan(auto: Boolean = false) {
         if (scanning) return
         val current = settings.value
         val granted = roots
@@ -166,10 +172,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 container.settings.setLastScan(result.scannedAt, result.bytesScanned)
                 notice = when {
                     result.cancelled -> "Scan cancelled. Partial results are shown."
+                    auto -> "Auto-scan: ${result.files.size} files, ${formatBytes(result.reclaimable)} reclaimable."
                     else -> "Scanned ${result.files.size} files (${formatBytes(result.bytesScanned)}) in ${formatDuration(result.durationMs)}."
                 }
             }
         }
+    }
+
+    /**
+     * Automatic scan: runs when the app opens or returns to the foreground, provided a folder
+     * is granted and the last result is older than the configured interval. No background
+     * service is involved, so nothing scans while the app is closed.
+     */
+    fun autoScanIfDue() {
+        if (scanning) return
+        val current = settings.value
+        if (!current.onboardingDone || roots.isEmpty()) return
+        val last = scan?.scannedAt?.takeIf { it > 0L } ?: current.lastScanAt
+        if (!AutoScanPolicy.isDue(last, System.currentTimeMillis(), current.autoScanHours, current.autoScan)) return
+        val now = SystemClock.elapsedRealtime()
+        if (lastAutoScanAttempt != 0L && now - lastAutoScanAttempt < AUTO_SCAN_GUARD_MS) return
+        lastAutoScanAttempt = now
+        startScan(auto = true)
     }
 
     fun cancelScan() {
@@ -413,6 +437,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setMinDuplicateMb(value: Long) = viewModelScope.launch { container.settings.setMinDuplicateMb(value) }
     fun setLargeFileMb(value: Long) = viewModelScope.launch { container.settings.setLargeFileMb(value) }
     fun setConfirmDeletes(value: Boolean) = viewModelScope.launch { container.settings.setConfirmDeletes(value) }
+    fun setAutoScan(value: Boolean) = viewModelScope.launch { container.settings.setAutoScan(value) }
+    fun setAutoScanHours(value: Long) = viewModelScope.launch { container.settings.setAutoScanHours(value) }
     fun setAutoUpdateCheck(value: Boolean) = viewModelScope.launch { container.settings.setAutoUpdateCheck(value) }
     fun setRuleEnabled(id: String, value: Boolean) = viewModelScope.launch { container.settings.setRuleEnabled(id, value) }
 

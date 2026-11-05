@@ -60,7 +60,7 @@ fun HomeScreen(
     val progress = vm.progress
     val roots = vm.roots
 
-    val storage = remember {
+    val storage = remember(scan?.scannedAt, history.size) {
         runCatching {
             val stat = StatFs(Environment.getDataDirectory().path)
             stat.availableBytes to stat.totalBytes
@@ -152,6 +152,16 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (settings.autoScan) {
+                        "Auto-scan every ${settings.autoScanHours} h when the app opens"
+                    } else {
+                        "Auto-scan is off"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 if (roots.isEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Text(

@@ -1,45 +1,32 @@
-# Modify-X 2.0.0
+# Modify-X 2.0.1
 
-Modify-X is now a storage cleaner. The debloater is gone: no package manager access, no
-root, no ADB bridge, no package catalogue. In their place is a cleaner that works on the
-files you actually own.
+Automatic scanning, so the app keeps itself current without you pressing the button.
 
-## What it does
+## New
 
-- **Junk scan** — temporary files, logs, crash dumps, stale editor backups, Windows
-  metadata, zero-byte files and thumbnail caches, matched by name and extension by rules you
-  can see and switch off.
-- **Duplicate finder** — groups files by exact size, then proves identity with a full
-  SHA-256 hash. Previews are decoded from the real files. Each group has a locked keeper
-  (shortest path, then oldest) and pre-selected copies.
-- **Large files and empty folders** — sorted by real size, with nested empty directories
-  detected bottom-up.
-- **By-type breakdown** — images, video, audio, documents, archives, other.
-- **History** — every cleanup with the byte count Android confirmed, plus refusals.
-- **Animated first-run entry** — three steps, then the folder picker; replayable from
-  Settings.
+- **Auto-scan.** When Modify-X opens or returns to the foreground, it scans by itself if the
+  last result is older than the chosen interval (default 6 hours). The interval can be set
+  to hourly, every 6 hours or daily in Settings → Scan options, and auto-scan can be turned
+  off entirely.
+- **Scan on folder grant.** Adding a folder triggers a scan immediately when auto-scan is
+  enabled, so a newly granted folder is never left unexamined.
+- **Live storage figures.** The free/used/total numbers on Home now refresh after a scan or
+  a cleanup instead of keeping the value from when the screen first composed.
 
-## Access model
+## Honest limits
 
-No storage permission is requested at all. Folders are granted through Android's own file
-picker and accessed with the Storage Access Framework, so the app can only touch what you
-hand it. Every deletion goes through `DocumentsContract.deleteDocument` and is re-queried
-afterwards; a delete that Android does not really perform is reported as a failure.
+Auto-scan is foreground only: it runs while you are using the app. There is no background
+service, no exact alarm and no battery-draining watchdog, because Android would throttle
+them anyway and the app only has access to folders you granted in this session's context.
+Nothing scans while the app is closed.
 
-## Removed
+## Checks
 
-The package catalogue, package actions, root/ADB shells, ADB protocol client, profiles,
-boot automation, component and permission editors, APK export, backup/restore and the shell
-console. `QUERY_ALL_PACKAGES`, `RECEIVE_BOOT_COMPLETED` and the WorkManager dependency are
-gone with them, and the app now declares only `INTERNET` and `REQUEST_INSTALL_PACKAGES`.
-
-## Updates
-
-The updater is unchanged: it reads this release page, verifies the download against the
-pinned signing certificate, refuses anything that is not newer, and installs over the
-existing app because the signing key is the same.
+The due-time rule lives in `AutoScanPolicy` and is unit-tested: disabled never scans, a
+missing timestamp is due immediately, a fresh result is not due, an old one is, and the
+interval is clamped to 1–168 hours. The full suite and the release build pass, and the APK
+is inspected for version, permissions and signer before publishing.
 
 ## Install
 
-`app-release.apk`, versionCode 7. Installing over 1.x replaces the old app in place; its
-settings are not reused because the data model changed.
+`app-release.apk`, versionCode 8. Installs over 2.0.0 with the same signing key.

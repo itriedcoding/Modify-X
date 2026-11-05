@@ -64,7 +64,7 @@ fun JunkScreen(vm: MainViewModel, onAddFolder: () -> Unit) {
                     "Run a scan to see which files match the junk rules."
                 },
                 actionLabel = if (vm.roots.isEmpty()) "Choose a folder" else "Scan now",
-                onAction = if (vm.roots.isEmpty()) onAddFolder else vm::startScan,
+                onAction = if (vm.roots.isEmpty()) onAddFolder else ({ vm.startScan() }),
             )
             return@Column
         }

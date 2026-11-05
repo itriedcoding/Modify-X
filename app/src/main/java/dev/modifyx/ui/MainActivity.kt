@@ -50,6 +50,12 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    override fun onResume() {
+        super.onResume()
+        // Returning to the app is a real trigger: auto-scan runs here when the result is stale.
+        viewModel.autoScanIfDue()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -93,6 +99,10 @@ private fun Root(vm: MainViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let(vm::addRoot)
+    }
+
+    LaunchedEffect(settings.onboardingDone, vm.roots.size) {
+        vm.autoScanIfDue()
     }
 
     if (!settings.onboardingDone) {

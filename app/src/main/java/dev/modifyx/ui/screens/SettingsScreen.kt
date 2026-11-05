@@ -111,6 +111,27 @@ fun SettingsScreen(vm: MainViewModel, onAddFolder: () -> Unit) {
 
         SectionCard(title = "Scan options") {
             ToggleRow(
+                title = "Scan automatically",
+                subtitle = "Scan when the app opens and the last result is older than the interval below",
+                checked = settings.autoScan,
+                onCheckedChange = vm::setAutoScan,
+            )
+            if (settings.autoScan) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    listOf(1L, 6L, 24L).forEach { hours ->
+                        FilterChip(
+                            selected = settings.autoScanHours == hours,
+                            onClick = { vm.setAutoScanHours(hours) },
+                            label = { Text(if (hours == 1L) "Hourly" else "Every $hours h") },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            ToggleRow(
                 title = "Include hidden files",
                 subtitle = "Hidden files are skipped by default. Thumbnail caches are always inspected.",
                 checked = settings.includeHidden,

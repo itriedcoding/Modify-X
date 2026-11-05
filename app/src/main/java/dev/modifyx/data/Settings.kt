@@ -28,6 +28,8 @@ data class AppSettings(
     val minDuplicateMb: Long = 0L,
     val largeFileMb: Long = 100L,
     val confirmDeletes: Boolean = true,
+    val autoScan: Boolean = true,
+    val autoScanHours: Long = 6L,
     val disabledRules: Set<String> = emptySet(),
     val autoUpdateCheck: Boolean = true,
     val lastUpdateCheck: Long = 0L,
@@ -57,6 +59,8 @@ class SettingsStore(private val context: Context) {
         val minDuplicateMb = longPreferencesKey("min_duplicate_mb")
         val largeFileMb = longPreferencesKey("large_file_mb")
         val confirmDeletes = booleanPreferencesKey("confirm_deletes")
+        val autoScan = booleanPreferencesKey("auto_scan")
+        val autoScanHours = longPreferencesKey("auto_scan_hours")
         val disabledRules = stringPreferencesKey("disabled_rules")
         val autoUpdateCheck = booleanPreferencesKey("auto_update_check")
         val lastUpdateCheck = longPreferencesKey("last_update_check")
@@ -79,6 +83,8 @@ class SettingsStore(private val context: Context) {
                 minDuplicateMb = prefs[Keys.minDuplicateMb] ?: 0L,
                 largeFileMb = prefs[Keys.largeFileMb] ?: 100L,
                 confirmDeletes = prefs[Keys.confirmDeletes] ?: true,
+                autoScan = prefs[Keys.autoScan] ?: true,
+                autoScanHours = prefs[Keys.autoScanHours] ?: 6L,
                 disabledRules = prefs[Keys.disabledRules].orEmpty().split('\n').filter { it.isNotBlank() }.toSet(),
                 autoUpdateCheck = prefs[Keys.autoUpdateCheck] ?: true,
                 lastUpdateCheck = prefs[Keys.lastUpdateCheck] ?: 0L,
@@ -95,6 +101,8 @@ class SettingsStore(private val context: Context) {
     suspend fun setMinDuplicateMb(mb: Long) = edit { it[Keys.minDuplicateMb] = mb.coerceIn(0L, 1024L) }
     suspend fun setLargeFileMb(mb: Long) = edit { it[Keys.largeFileMb] = mb.coerceIn(1L, 4096L) }
     suspend fun setConfirmDeletes(enabled: Boolean) = edit { it[Keys.confirmDeletes] = enabled }
+    suspend fun setAutoScan(enabled: Boolean) = edit { it[Keys.autoScan] = enabled }
+    suspend fun setAutoScanHours(hours: Long) = edit { it[Keys.autoScanHours] = hours.coerceIn(1L, 168L) }
     suspend fun setAutoUpdateCheck(enabled: Boolean) = edit { it[Keys.autoUpdateCheck] = enabled }
     suspend fun setLastUpdateCheck(timestamp: Long) = edit { it[Keys.lastUpdateCheck] = timestamp }
     suspend fun setOnboardingDone(done: Boolean) = edit { it[Keys.onboarding] = done }

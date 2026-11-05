@@ -69,7 +69,7 @@ fun DuplicatesScreen(vm: MainViewModel, onAddFolder: () -> Unit) {
                 title = "No scan yet",
                 message = if (vm.roots.isEmpty()) "Grant a folder first, then scan it." else "Run a scan to compare file contents.",
                 actionLabel = if (vm.roots.isEmpty()) "Choose a folder" else "Scan now",
-                onAction = if (vm.roots.isEmpty()) onAddFolder else vm::startScan,
+                onAction = if (vm.roots.isEmpty()) onAddFolder else ({ vm.startScan() }),
             )
             return@Column
         }

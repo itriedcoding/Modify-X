@@ -152,3 +152,22 @@ object DuplicateGrouper {
         return groups.sortedWith(compareByDescending<DuplicateGroup> { it.waste }.thenBy { it.files.first().name })
     }
 }
+
+/**
+ * Decides whether an automatic scan is due. Kept as plain arithmetic so the rule can be
+ * unit-tested without a clock, a device or a filesystem.
+ */
+object AutoScanPolicy {
+
+    const val MIN_HOURS = 1L
+    const val MAX_HOURS = 168L
+
+    fun intervalMillis(hours: Long): Long = hours.coerceIn(MIN_HOURS, MAX_HOURS) * 60L * 60_000L
+
+    fun isDue(lastScanAt: Long, now: Long, intervalHours: Long, enabled: Boolean): Boolean {
+        if (!enabled) return false
+        if (lastScanAt <= 0L) return true
+        if (now <= lastScanAt) return false
+        return now - lastScanAt >= intervalMillis(intervalHours)
+    }
+}
