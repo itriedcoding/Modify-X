@@ -1,8 +1,8 @@
 package dev.modifyx.data
 
+import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.UUID
 
 /** A theme the user created on this device: one seed colour, resolved into a full scheme. */
 data class CustomTheme(

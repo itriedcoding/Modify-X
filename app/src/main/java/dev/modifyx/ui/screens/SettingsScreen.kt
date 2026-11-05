@@ -5,32 +5,29 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,16 +36,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.modifyx.data.BloatCatalog
 import dev.modifyx.data.ThemeId
 import dev.modifyx.data.ThemeMode
-import dev.modifyx.ui.MainViewModel
+import dev.modifyx.ui.components.ScreenHeader
 import dev.modifyx.ui.components.SectionCard
+import dev.modifyx.ui.components.ToggleRow
+import dev.modifyx.ui.components.UpdateSection
+import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.theme.Palette
 
 @Composable
@@ -75,7 +75,7 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall)
+        ScreenHeader(title = "Settings", subtitle = "Preferences stay on this device")
 
         SectionCard(title = "Theme") {
             Row(
@@ -159,7 +159,7 @@ fun SettingsScreen(
 
         SectionCard(
             title = "Updates",
-            subtitle = "Follows github.com/${"itriedcoding/Modify-X"}/releases; downloads are signature-checked before installing.",
+            subtitle = "Follows ${RELEASES_URL}; downloads are signature-checked before installing.",
         ) {
             Text(
                 "Installed ${update.currentVersion.ifBlank { version }}",
@@ -180,43 +180,8 @@ fun SettingsScreen(
                 Text(if (update.checking) "Checking…" else "Check for updates")
             }
 
-            val info = update.available
-            if (info != null) {
-                Spacer(Modifier.height(10.dp))
-                Text("Version ${info.version} available", style = MaterialTheme.typography.titleMedium)
-                if (info.notes.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        info.notes.take(700),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = vm::downloadAndInstallUpdate,
-                    enabled = !update.downloading,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(if (update.downloading) "Downloading ${update.progress}%" else "Download & install")
-                }
-                if (update.downloading) {
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { update.progress / 100f },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-
-            update.message?.let { message ->
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Spacer(Modifier.height(10.dp))
+            UpdateSection(state = update, onInstall = vm::downloadAndInstallUpdate)
         }
 
         SectionCard(title = "Browsing") {
@@ -386,27 +351,4 @@ private fun ThemeEditorDialog(
     )
 }
 
-@Composable
-private fun ToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
+private const val RELEASES_URL = "github.com/itriedcoding/Modify-X/releases"

@@ -1,19 +1,19 @@
 package dev.modifyx.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -23,8 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,11 +36,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.modifyx.data.ComponentRow
 import dev.modifyx.data.ComponentType
-import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.Badge
-import dev.modifyx.ui.components.EmptyState
-import dev.modifyx.ui.components.SectionCard
 import dev.modifyx.ui.components.BusyDialog
+import dev.modifyx.ui.components.EmptyState
+import dev.modifyx.ui.components.ScreenHeader
+import dev.modifyx.ui.components.SectionCard
+import dev.modifyx.ui.MainViewModel
 
 /**
  * Individual manifest components of one package. Disabling a receiver stops a broadcast
@@ -64,30 +65,17 @@ fun ComponentsScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    entry?.label ?: packageName,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    packageName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (vm.componentsLoading) {
-                CircularProgressIndicator(modifier = Modifier.width(20.dp), strokeWidth = 2.dp)
-            }
-        }
+        ScreenHeader(
+            title = entry?.label ?: packageName,
+            subtitle = packageName,
+            onBack = onBack,
+            trailing = {
+                if (vm.componentsLoading) {
+                    CircularProgressIndicator(modifier = Modifier.width(20.dp), strokeWidth = 2.dp)
+                }
+            },
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+        )
 
         Column(
             modifier = Modifier

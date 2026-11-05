@@ -11,56 +11,35 @@ import dev.modifyx.container
 import dev.modifyx.core.BootProfileReceiver
 import dev.modifyx.core.PrivilegeManager
 import dev.modifyx.core.UpdateChecker
+import dev.modifyx.data.AppDetails
 import dev.modifyx.data.AppEntry
 import dev.modifyx.data.AppFilter
 import dev.modifyx.data.AppSettings
 import dev.modifyx.data.AppSnapshot
-import dev.modifyx.data.ComponentRow
-import dev.modifyx.data.CustomTheme
-import dev.modifyx.data.UsageAccess
-import dev.modifyx.data.StandbyBucket
 import dev.modifyx.data.BackupDocument
 import dev.modifyx.data.BackupManager
 import dev.modifyx.data.BloatCatalog
+import dev.modifyx.data.ComponentRow
+import dev.modifyx.data.CustomTheme
 import dev.modifyx.data.DebloatAction
+import dev.modifyx.data.HistoryRecord
 import dev.modifyx.data.PackageRepository
 import dev.modifyx.data.Profile
 import dev.modifyx.data.RiskLevel
 import dev.modifyx.data.SnapshotFile
 import dev.modifyx.data.SortMode
-import kotlinx.coroutines.flow.SharingStarted
+import dev.modifyx.data.StandbyBucket
+import dev.modifyx.data.ThemeMode
+import dev.modifyx.data.UsageAccess
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
-
-data class Busy(val title: String, val done: Int, val total: Int, val current: String)
-
-data class ConsoleState(
-    val running: Boolean = false,
-    val command: String = "",
-    val output: String = "",
-    val exitCode: Int? = null,
-    val durationMs: Long = 0L,
-)
 
 private const val UNUSED_WINDOW_MS = 60L * 24 * 60 * 60 * 1000
-
-data class UpdateState(
-    val currentVersion: String = "",
-    val checking: Boolean = false,
-    val available: UpdateChecker.UpdateInfo? = null,
-    val downloading: Boolean = false,
-    val progress: Int = 0,
-    val message: String? = null,
-)
-
-data class ImportPreview(
-    val document: BackupDocument,
-    val restorable: Int,
-    val reRemovable: Int,
-)
+private const val AUTO_UPDATE_INTERVAL_MS = 12L * 60 * 60 * 1000
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -85,7 +64,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var selection by mutableStateOf<Set<String>>(emptySet())
         private set
 
-    var details by mutableStateOf<dev.modifyx.data.AppDetails?>(null)
+    var details by mutableStateOf<AppDetails?>(null)
         private set
     var detailsLoading by mutableStateOf(false)
         private set
@@ -133,7 +112,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val stored = container.settings.settings.first()
             PrivilegeManager.setAdbPort(stored.adbPort)
             if (stored.adbAutoConnect) PrivilegeManager.refresh()
-            val stale = System.currentTimeMillis() - stored.lastUpdateCheck > 12 * 60 * 60 * 1000L
+            val stale = System.currentTimeMillis() - stored.lastUpdateCheck > AUTO_UPDATE_INTERVAL_MS
             if (stored.autoUpdateCheck && stale) checkForUpdates()
         }
     }
@@ -291,7 +270,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun undo(record: dev.modifyx.data.HistoryRecord) {
+    fun undo(record: HistoryRecord) {
         viewModelScope.launch {
             val result = container.runner.undo(record)
             notice = result?.message ?: "This action cannot be undone."
@@ -517,9 +496,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- settings ---
 
-    fun setTheme(mode: dev.modifyx.data.ThemeMode) = viewModelScope.launch { container.settings.setTheme(mode) }
+    fun setTheme(mode: ThemeMode) = viewModelScope.launch { container.settings.setTheme(mode) }
     fun setDynamicColor(value: Boolean) = viewModelScope.launch { container.settings.setDynamicColor(value) }
-    fun setFilter(filter: AppFilter) = viewModelScope.launch { container.settings.setFilter(filter) }
+    fun setFilter(filter: AppFilter) {
+        // A new filter hides rows; keeping them selected would let a batch act on packages
+        // the user can no longer see.
+        if (filter != settings.value.filter) selection = emptySet()
+        viewModelScope.launch { container.settings.setFilter(filter) }
+    }
     fun setSort(mode: SortMode) = viewModelScope.launch { container.settings.setSortMode(mode) }
     fun setAllowRisky(value: Boolean) = viewModelScope.launch { container.settings.setAllowRisky(value) }
     fun setAllowProtected(value: Boolean) = viewModelScope.launch { container.settings.setAllowProtected(value) }

@@ -3,18 +3,18 @@ package dev.modifyx.ui.screens
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,10 +32,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.MonoBlock
+import dev.modifyx.ui.components.ScreenHeader
 import dev.modifyx.ui.components.SectionCard
 import dev.modifyx.ui.formatDuration
+import dev.modifyx.ui.MainViewModel
 
 @Composable
 fun ConsoleScreen(vm: MainViewModel, onBack: () -> Unit) {
@@ -51,10 +52,11 @@ fun ConsoleScreen(vm: MainViewModel, onBack: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Text("Shell console", style = MaterialTheme.typography.headlineSmall)
-        }
+        ScreenHeader(
+            title = "Shell console",
+            subtitle = "Commands run through ${privileges.summary}",
+            onBack = onBack,
+        )
         Text(
             "Commands run through ${privileges.summary}. The exit code and raw output are shown unchanged.",
             style = MaterialTheme.typography.bodySmall,

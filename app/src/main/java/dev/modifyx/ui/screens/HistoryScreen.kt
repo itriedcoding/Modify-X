@@ -2,18 +2,18 @@ package dev.modifyx.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,11 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.Badge
 import dev.modifyx.ui.components.ConfirmDialog
 import dev.modifyx.ui.components.EmptyState
+import dev.modifyx.ui.components.ScreenHeader
 import dev.modifyx.ui.formatDateTime
+import dev.modifyx.ui.MainViewModel
 
 @Composable
 fun HistoryScreen(vm: MainViewModel) {
@@ -41,26 +42,18 @@ fun HistoryScreen(vm: MainViewModel) {
     var confirmClear by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("History", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "${records.size} recorded action${if (records.size == 1) "" else "s"}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (records.isNotEmpty()) {
-                IconButton(onClick = { confirmClear = true }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Clear history")
+        ScreenHeader(
+            title = "History",
+            subtitle = "${records.size} recorded action${if (records.size == 1) "" else "s"}",
+            trailing = {
+                if (records.isNotEmpty()) {
+                    IconButton(onClick = { confirmClear = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Clear history")
+                    }
                 }
-            }
-        }
+            },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
 
         if (records.isEmpty()) {
             EmptyState(
@@ -104,7 +97,6 @@ fun HistoryScreen(vm: MainViewModel) {
                         }
                     }
                     if (!record.success) {
-                        Spacer(Modifier.width(8.dp))
                         Text(
                             record.message,
                             style = MaterialTheme.typography.bodySmall,
@@ -113,14 +105,11 @@ fun HistoryScreen(vm: MainViewModel) {
                         )
                     }
                     if (record.verified && record.success) {
-                        Spacer(Modifier.width(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Badge(
-                                "verified",
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
+                        Badge(
+                            "verified",
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))

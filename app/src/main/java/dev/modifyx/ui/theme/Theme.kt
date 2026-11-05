@@ -3,17 +3,17 @@ package dev.modifyx.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
 import dev.modifyx.data.CustomTheme
 import dev.modifyx.data.ThemeId
@@ -103,10 +103,7 @@ fun ModifyXTheme(
         custom != null -> schemeFromSeed(custom.seed, dark, amoled)
         themeId == ThemeId.DYNAMIC && dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        themeId == ThemeId.DYNAMIC && !dynamicColor ->
-            if (dark) (if (amoled) amoledScheme(DarkScheme) else DarkScheme) else LightScheme
-        dark && amoled -> amoledScheme(DarkScheme)
-        dark -> DarkScheme
+        dark -> if (amoled) amoledScheme(DarkScheme) else DarkScheme
         else -> LightScheme
     }
 

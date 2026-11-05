@@ -1,23 +1,23 @@
 package dev.modifyx.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -29,8 +29,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,21 +42,22 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.modifyx.core.PrivilegeMode
 import dev.modifyx.data.AppEntry
-import dev.modifyx.data.DebloatAction
 import dev.modifyx.data.BloatCatalog
+import dev.modifyx.data.DebloatAction
 import dev.modifyx.data.StandbyBucket
-import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.AppIcon
 import dev.modifyx.ui.components.Badge
+import dev.modifyx.ui.components.BusyDialog
 import dev.modifyx.ui.components.ConfirmDialog
 import dev.modifyx.ui.components.KeyValueRow
 import dev.modifyx.ui.components.MonoBlock
 import dev.modifyx.ui.components.RiskBadge
+import dev.modifyx.ui.components.ScreenHeader
 import dev.modifyx.ui.components.SectionCard
-import dev.modifyx.ui.components.BusyDialog
 import dev.modifyx.ui.formatAgo
 import dev.modifyx.ui.formatBytes
 import dev.modifyx.ui.formatDateTime
+import dev.modifyx.ui.MainViewModel
 
 @Composable
 fun AppDetailScreen(
@@ -90,7 +91,6 @@ fun AppDetailScreen(
 
     val catalog = remember(packageName) { BloatCatalog.find(packageName) }
     val blocked = vm.blockReason(entry, settings)
-    val app: AppEntry = entry
     val request: (DebloatAction) -> Unit = { action ->
         val needsConfirmation = action == DebloatAction.UNINSTALL_FOR_USER ||
             action == DebloatAction.CLEAR_DATA ||
@@ -98,7 +98,7 @@ fun AppDetailScreen(
         if (settings.confirmDestructive && needsConfirmation) {
             confirm = action
         } else {
-            vm.runSingle(action, app)
+            vm.runSingle(action, entry)
         }
     }
 
@@ -109,25 +109,12 @@ fun AppDetailScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Spacer(Modifier.width(4.dp))
-            AppIcon(vm.repository, entry.packageName, size = 48.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    entry.label,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    entry.packageName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        ScreenHeader(
+            title = entry.label,
+            subtitle = entry.packageName,
+            onBack = onBack,
+            leading = { AppIcon(vm.repository, entry.packageName, size = 44.dp) },
+        )
 
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (entry.removedForUser) {

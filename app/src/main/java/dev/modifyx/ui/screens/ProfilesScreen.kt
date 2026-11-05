@@ -2,20 +2,20 @@ package dev.modifyx.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -24,7 +24,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,14 +38,18 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.modifyx.data.BloatCatalog
 import dev.modifyx.data.Profile
-import dev.modifyx.ui.MainViewModel
+import dev.modifyx.data.RiskLevel
 import dev.modifyx.ui.components.ConfirmDialog
+import dev.modifyx.ui.components.ScreenHeader
 import dev.modifyx.ui.components.SectionCard
+import dev.modifyx.ui.components.ToggleRow
 import dev.modifyx.ui.formatAgo
+import dev.modifyx.ui.MainViewModel
 
 @Composable
 fun ProfilesScreen(vm: MainViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val privileges by vm.privileges.collectAsStateWithLifecycle()
     val profiles = vm.profiles
     val builtIns = profiles.filter { it.builtIn }
     val custom = profiles.filterNot { it.builtIn }
@@ -64,11 +67,9 @@ fun ProfilesScreen(vm: MainViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Presets", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "Curated groups of known bloatware, filtered to what is actually installed on this device. Nothing is applied until you press Apply.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        ScreenHeader(
+            title = "Presets",
+            subtitle = "Curated bloatware groups, filtered to this device. Nothing applies until you press Apply.",
         )
 
         if (builtIns.isEmpty()) {
@@ -82,7 +83,7 @@ fun ProfilesScreen(vm: MainViewModel) {
 
         builtIns.forEach { profile ->
             val risky = remember(profile) {
-                profile.packages.count { BloatCatalog.find(it)?.risk != dev.modifyx.data.RiskLevel.SAFE }
+                profile.packages.count { BloatCatalog.find(it)?.risk != RiskLevel.SAFE }
             }
             SectionCard(
                 title = profile.name,
@@ -101,7 +102,7 @@ fun ProfilesScreen(vm: MainViewModel) {
                     }
                     Button(
                         onClick = { pendingApply = profile },
-                        enabled = vm.privileges.value.canModify,
+                        enabled = privileges.canModify,
                         modifier = Modifier.weight(1f),
                     ) { Text("Apply") }
                 }
@@ -162,21 +163,16 @@ fun ProfilesScreen(vm: MainViewModel) {
             title = "Automation",
             subtitle = "Re-apply a profile after every boot. Requires root or the ADB bridge to be available at boot.",
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Apply profile after boot", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        if (settings.autoApplyProfileId == null) {
-                            "Choose a profile below first."
-                        } else {
-                            "Profile: ${profiles.firstOrNull { it.id == settings.autoApplyProfileId }?.name ?: settings.autoApplyProfileId}"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = settings.autoApplyEnabled, onCheckedChange = vm::setAutoApply)
-            }
+            ToggleRow(
+                title = "Apply profile after boot",
+                subtitle = if (settings.autoApplyProfileId == null) {
+                    "Choose a profile below first."
+                } else {
+                    "Profile: ${profiles.firstOrNull { it.id == settings.autoApplyProfileId }?.name ?: settings.autoApplyProfileId}"
+                },
+                checked = settings.autoApplyEnabled,
+                onCheckedChange = vm::setAutoApply,
+            )
             Spacer(Modifier.height(8.dp))
             val choices = profiles
             Column {
@@ -235,7 +231,7 @@ fun ProfilesScreen(vm: MainViewModel) {
                         preview = null
                         pendingApply = profile
                     },
-                    enabled = vm.privileges.value.canModify,
+                    enabled = privileges.canModify,
                 ) { Text("Apply") }
             },
         )

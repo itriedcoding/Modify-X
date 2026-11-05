@@ -3,23 +3,22 @@ package dev.modifyx.ui.screens
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -32,12 +31,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.modifyx.data.DebloatAction
-import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.PrivilegeCard
 import dev.modifyx.ui.components.SectionCard
 import dev.modifyx.ui.components.StatTile
+import dev.modifyx.ui.components.UpdateSection
 import dev.modifyx.ui.formatAgo
 import dev.modifyx.ui.formatBytes
+import dev.modifyx.ui.MainViewModel
 
 @Composable
 fun HomeScreen(
@@ -82,26 +82,10 @@ fun HomeScreen(
             onDismissMessage = vm::dismissAdbMessage,
         )
 
-        val update = vm.update.available
-        if (update != null) {
-            SectionCard(
-                title = "Update available \u00b7 ${update.version}",
-                subtitle = update.notes.lineSequence().firstOrNull { it.isNotBlank() }?.take(140),
-            ) {
-                Button(
-                    onClick = vm::downloadAndInstallUpdate,
-                    enabled = !vm.update.downloading,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(if (vm.update.downloading) "Downloading ${vm.update.progress}%" else "Download & install")
-                }
-                if (vm.update.downloading) {
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { vm.update.progress / 100f },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+        val available = vm.update.available
+        if (available != null) {
+            SectionCard(title = "Update available · ${available.version}") {
+                UpdateSection(state = vm.update, onInstall = vm::downloadAndInstallUpdate)
             }
         }
 

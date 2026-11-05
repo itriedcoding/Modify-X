@@ -4,20 +4,20 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -36,15 +36,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.modifyx.ui.MainViewModel
+import dev.modifyx.data.SnapshotFile
+import dev.modifyx.ui.components.ScreenHeader
 import dev.modifyx.ui.components.SectionCard
 import dev.modifyx.ui.formatDateTime
+import dev.modifyx.ui.MainViewModel
 
 @Composable
 fun BackupScreen(vm: MainViewModel, onBack: () -> Unit) {
     val snapshots = vm.snapshots
     val preview = vm.importPreview
-    var pendingDelete by remember { mutableStateOf<dev.modifyx.data.SnapshotFile?>(null) }
+    var pendingDelete by remember { mutableStateOf<SnapshotFile?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) vm.exportBackup(uri)
@@ -60,10 +62,11 @@ fun BackupScreen(vm: MainViewModel, onBack: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Text("Backup & restore", style = MaterialTheme.typography.headlineSmall)
-        }
+        ScreenHeader(
+            title = "Backup & restore",
+            subtitle = "Snapshots describe package state only",
+            onBack = onBack,
+        )
         Text(
             "A snapshot records which packages are installed, removed or disabled, so the same debloat state can be rebuilt after a factory reset or on another device.",
             style = MaterialTheme.typography.bodySmall,

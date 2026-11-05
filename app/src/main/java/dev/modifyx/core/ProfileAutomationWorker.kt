@@ -3,8 +3,8 @@ package dev.modifyx.core
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import dev.modifyx.ModifyXApp
 import dev.modifyx.data.DebloatAction
+import dev.modifyx.ModifyXApp
 import kotlinx.coroutines.flow.first
 
 /**

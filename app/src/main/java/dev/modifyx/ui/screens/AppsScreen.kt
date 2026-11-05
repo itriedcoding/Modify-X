@@ -1,29 +1,29 @@
 package dev.modifyx.ui.screens
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -53,13 +53,14 @@ import dev.modifyx.data.AppFilter
 import dev.modifyx.data.BloatCatalog
 import dev.modifyx.data.DebloatAction
 import dev.modifyx.data.SortMode
-import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.AppIcon
 import dev.modifyx.ui.components.Badge
 import dev.modifyx.ui.components.ConfirmDialog
 import dev.modifyx.ui.components.EmptyState
 import dev.modifyx.ui.components.RiskBadge
+import dev.modifyx.ui.components.ScreenHeader
 import dev.modifyx.ui.formatBytes
+import dev.modifyx.ui.MainViewModel
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -78,6 +79,11 @@ fun AppsScreen(
     val selectedApps = remember(selection, apps) { apps.filter { it.packageName in selection } }
 
     Column(Modifier.fillMaxSize()) {
+        ScreenHeader(
+            title = "Apps",
+            subtitle = "${apps.size} shown · ${vm.snapshot.apps.count { it.installedForUser }} installed",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
         OutlinedTextField(
             value = vm.query,
             onValueChange = vm::updateQuery,
@@ -119,12 +125,7 @@ fun AppsScreen(
                 .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "${apps.size} packages",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
+            Spacer(Modifier.weight(1f))
             Box {
                 TextButton(onClick = { sortExpanded = true }) {
                     Text("Sort: ${settings.sortMode.label}")
@@ -145,7 +146,7 @@ fun AppsScreen(
                     }
                 }
             }
-            if (settings.filter == AppFilter.ALL) {
+            if (apps.isNotEmpty()) {
                 TextButton(onClick = { vm.selectAll(apps) }) { Text("Select all") }
             }
         }
