@@ -25,15 +25,33 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
+      - name: Locate Android SDK
         id: sdk
-        uses: android-actions/setup-android@v3
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK_ROOT" ] || [ ! -d "$SDK_ROOT/cmdline-tools" ]; then
+            SDK_ROOT="$HOME/android-sdk"
+            echo "Preinstalled SDK missing, downloading command line tools to $SDK_ROOT"
+            mkdir -p "$SDK_ROOT/cmdline-tools"
+            curl -fsSL -o /tmp/cmdline-tools.zip \
+              https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q /tmp/cmdline-tools.zip -d "$SDK_ROOT/cmdline-tools"
+            mv "$SDK_ROOT/cmdline-tools/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"
+          fi
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "SDK at $SDK_ROOT"
+          ls "$SDK_ROOT/cmdline-tools"
 
       - name: Install SDK packages
         id: packages
         run: |
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" > /dev/null
-          ls "$ANDROID_HOME/platforms"
+          set -euo pipefail
+          SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
 
       - name: Resolve version
         id: version
@@ -62,16 +80,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -o pipefail
           TAG="v${{ steps.version.outputs.name }}"
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          echo "publishing $TAG from $APK"
+          echo "publishing $TAG from $APK" | tee release.log
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --clobber
+            gh release upload "$TAG" "$APK" --clobber 2>&1 | tee -a release.log
           else
             gh release create "$TAG" "$APK" \
               --title "Modify-X ${{ steps.version.outputs.name }}" \
               --notes-file RELEASE_NOTES.md \
-              --target "$GITHUB_SHA"
+              --target "$GITHUB_SHA" 2>&1 | tee -a release.log
           fi
 
       - name: Publish diagnostics on failure
@@ -96,6 +115,9 @@ jobs:
             echo "  release=${{ steps.release.outcome }}"
             echo
             echo "sdk: ${ANDROID_HOME:-unset}"
+            echo
+            echo "=== release log ==="
+            cat release.log 2>/dev/null || echo "no release log"
             echo
             echo "=== build log tail ==="
             tail -c 40000 ci-build.log 2>/dev/null || echo "no build log"
