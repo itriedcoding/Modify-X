@@ -1,4 +1,4 @@
-## Modify-X 1.0.0
+## Modify-X — Android debloater
 
 A local, verified Android debloater. Install the APK below and grant root or Shizuku
 access to change packages; without either, the app is read-only by design.

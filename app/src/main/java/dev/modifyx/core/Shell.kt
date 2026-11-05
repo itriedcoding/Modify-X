@@ -16,7 +16,6 @@ data class ShellResult(
 ) {
     val success: Boolean get() = exitCode == 0
     val output: String get() = (stdout + stderr).trim()
-    val wasKilled: Boolean get() = exitCode == EXIT_TIMEOUT
 
     companion object {
         const val EXIT_TIMEOUT = -9

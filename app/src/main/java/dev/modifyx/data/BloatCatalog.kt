@@ -270,9 +270,6 @@ object BloatCatalog {
 
     fun inGroup(group: CatalogGroup): List<CatalogEntry> = entries.filter { it.group == group }
 
-    fun groupsWithPackages(installed: Set<String>): List<CatalogGroup> = CatalogGroup.entries
-        .filter { group -> entries.any { it.group == group && it.pkg in installed } }
-
     /**
      * Packages that are never offered for removal: removing them bricks core Android
      * functionality (system UI, telephony, package installer, launchers, …).

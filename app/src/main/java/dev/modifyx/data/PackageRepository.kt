@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
 import android.os.Build
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
@@ -154,11 +153,6 @@ class PackageRepository(private val context: Context) {
         .filter { it.isNotEmpty() }
         .toSet()
 
-    suspend fun isInstalledForUser(pkg: String): Boolean = withContext(Dispatchers.IO) {
-        val result = PrivilegeManager.shell().exec("pm list packages --user 0 $pkg", 15_000)
-        result.success && result.stdout.lineSequence().any { it.trim() == "package:$pkg" }
-    }
-
     suspend fun loadDetails(pkg: String): AppDetails? = withContext(Dispatchers.IO) {
         val flags = PackageManager.PackageInfoFlags.of(
             (
@@ -243,8 +237,6 @@ class PackageRepository(private val context: Context) {
             .digest(bytes)
             .joinToString(":") { "%02X".format(it) }
     }.getOrNull()
-
-    fun drawableFor(pkg: String): Drawable? = runCatching { pm.getApplicationIcon(pkg) }.getOrNull()
 
     fun iconFor(pkg: String): ImageBitmap? {
         iconCache.get(pkg)?.let { return it }

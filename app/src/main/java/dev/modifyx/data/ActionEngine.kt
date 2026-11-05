@@ -83,11 +83,4 @@ class ActionEngine {
         if (!result.success) return false
         return result.stdout.lineSequence().map { it.trim() }.any { it == "package:$pkg" }
     }
-
-    /** Reads the live package count so the UI can show real numbers, not guesses. */
-    suspend fun packageCount(): Int? = withContext(Dispatchers.IO) {
-        val result = PrivilegeManager.shell().exec("pm list packages --user 0", 30_000)
-        if (!result.success) return@withContext null
-        result.stdout.lineSequence().count { it.trim().startsWith("package:") }
-    }
 }

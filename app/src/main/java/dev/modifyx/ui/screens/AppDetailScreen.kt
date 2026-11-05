@@ -81,6 +81,17 @@ fun AppDetailScreen(
 
     val catalog = remember(packageName) { BloatCatalog.find(packageName) }
     val blocked = vm.blockReason(entry, settings)
+    val app: AppEntry = entry
+    val request: (DebloatAction) -> Unit = { action ->
+        val needsConfirmation = action == DebloatAction.UNINSTALL_FOR_USER ||
+            action == DebloatAction.CLEAR_DATA ||
+            action == DebloatAction.UNINSTALL_FULL
+        if (settings.confirmDestructive && needsConfirmation) {
+            confirm = action
+        } else {
+            vm.runSingle(action, app)
+        }
+    }
 
     Column(
         Modifier
@@ -149,7 +160,7 @@ fun AppDetailScreen(
                     ) { Text("Restore") }
                 } else {
                     Button(
-                        onClick = { confirm = DebloatAction.UNINSTALL_FOR_USER },
+                        onClick = { request(DebloatAction.UNINSTALL_FOR_USER) },
                         enabled = enabled,
                         modifier = Modifier.weight(1f),
                     ) { Text("Uninstall") }
@@ -176,7 +187,7 @@ fun AppDetailScreen(
                     modifier = Modifier.weight(1f),
                 ) { Text("Force stop") }
                 OutlinedButton(
-                    onClick = { confirm = DebloatAction.CLEAR_DATA },
+                    onClick = { request(DebloatAction.CLEAR_DATA) },
                     enabled = enabled && entry.installedForUser,
                     modifier = Modifier.weight(1f),
                 ) { Text("Clear data") }
@@ -184,7 +195,7 @@ fun AppDetailScreen(
             if (entry.isUserApp && entry.installedForUser) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
-                    onClick = { confirm = DebloatAction.UNINSTALL_FULL },
+                    onClick = { request(DebloatAction.UNINSTALL_FULL) },
                     enabled = enabled,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Uninstall completely", color = MaterialTheme.colorScheme.error) }

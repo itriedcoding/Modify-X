@@ -153,7 +153,13 @@ fun AppsScreen(
             SelectionBar(
                 vm = vm,
                 selected = selectedApps,
-                onAction = { pendingAction = it },
+                onAction = { action ->
+                    if (settings.confirmDestructive) {
+                        pendingAction = action
+                    } else {
+                        vm.runBatch(action, vm.applicableTargets(action, selectedApps, settings))
+                    }
+                },
                 onClear = vm::clearSelection,
             )
         }
