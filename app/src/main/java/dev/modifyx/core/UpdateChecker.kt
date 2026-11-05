@@ -196,13 +196,6 @@ object UpdateChecker {
     }
 
     suspend fun install(context: Context, apk: File): InstallResult = withContext(Dispatchers.IO) {
-        if (PrivilegeManager.canModify()) {
-            val result = PrivilegeManager.shell().exec("pm install -r \"${apk.absolutePath}\"", 180_000)
-            if (result.success) {
-                return@withContext InstallResult(true, false, "Update installed through the privileged shell.")
-            }
-        }
-
         val uri: Uri = runCatching {
             FileProvider.getUriForFile(context, "${context.packageName}.files", apk)
         }.getOrElse { error ->

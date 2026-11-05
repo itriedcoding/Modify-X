@@ -2,27 +2,17 @@ package dev.modifyx
 
 import android.app.Application
 import android.content.Context
-import dev.modifyx.core.PrivilegeManager
-import dev.modifyx.data.ActionEngine
-import dev.modifyx.data.ActionRunner
-import dev.modifyx.data.ApkExporter
-import dev.modifyx.data.AppControls
-import dev.modifyx.data.BackupManager
+import dev.modifyx.data.CleanupEngine
 import dev.modifyx.data.HistoryStore
-import dev.modifyx.data.PackageRepository
-import dev.modifyx.data.ProfileStore
 import dev.modifyx.data.SettingsStore
+import dev.modifyx.data.TreeScanner
 
 class AppContainer(context: Context) {
-    val repository = PackageRepository(context)
-    val history = HistoryStore(context)
-    val profiles = ProfileStore(context)
-    val settings = SettingsStore(context)
-    val backups = BackupManager(context)
-    val engine = ActionEngine()
-    val controls = AppControls(context, repository)
-    val exporter = ApkExporter()
-    val runner = ActionRunner(engine, history, settings)
+    private val app = context.applicationContext
+    val settings = SettingsStore(app)
+    val history = HistoryStore(app)
+    val scanner = TreeScanner(app.contentResolver)
+    val cleaner = CleanupEngine(app.contentResolver)
 }
 
 class ModifyXApp : Application() {
@@ -33,7 +23,6 @@ class ModifyXApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        PrivilegeManager.init(this)
     }
 }
 

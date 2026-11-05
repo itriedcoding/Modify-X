@@ -1,25 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Listing every installed package is the whole point of the app. -->
-    <uses-permission
-        android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
-
-    <!-- Re-applying a saved profile after a reboot. -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <!-- Installing app updates; the app only ever contacts this project's release page. -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-
-    <!-- The only network use: reading the project's GitHub release page for updates. -->
+    <!-- The only network use: reading this project's public GitHub release page. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- WorkManager declares this for network constraints, which this app never uses. -->
-    <uses-permission
-        android:name="android.permission.ACCESS_NETWORK_STATE"
-        tools:node="remove" />
+    <!-- Handing a downloaded update to the system installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
+      No storage permission is declared. Every folder this app reads or deletes is granted
+      by the user through ACTION_OPEN_DOCUMENT_TREE, which is scoped to that folder only.
+    -->
 
     <application
         android:name=".ModifyXApp"
@@ -45,17 +36,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <receiver
-            android:name=".core.BootProfileReceiver"
-            android:directBootAware="false"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
 
         <!-- Hands staged APKs (self-updates) to the system installer with a read grant. -->
         <provider

@@ -5,21 +5,18 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -32,50 +29,131 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.modifyx.data.BloatCatalog
+import dev.modifyx.data.JunkRules
 import dev.modifyx.data.ThemeId
 import dev.modifyx.data.ThemeMode
+import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.ScreenHeader
 import dev.modifyx.ui.components.SectionCard
 import dev.modifyx.ui.components.ToggleRow
 import dev.modifyx.ui.components.UpdateSection
-import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.theme.Palette
 
 @Composable
-fun SettingsScreen(
-    vm: MainViewModel,
-    onOpenConsole: () -> Unit,
-    onOpenBackup: () -> Unit,
-) {
+fun SettingsScreen(vm: MainViewModel, onAddFolder: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val privileges by vm.privileges.collectAsStateWithLifecycle()
     val update = vm.update
     val context = LocalContext.current
-    var showProtected by remember { mutableStateOf(false) }
     var showThemeEditor by remember { mutableStateOf(false) }
     val version = remember {
-        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
-            .getOrNull() ?: "?"
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
     }
 
     Column(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenHeader(title = "Settings", subtitle = "Preferences stay on this device")
+        ScreenHeader(title = "Settings", subtitle = "Folders, rules and appearance")
+
+        SectionCard(
+            title = "Folders",
+            subtitle = "Android's file picker grants access per folder. Revoking it here stops all access.",
+        ) {
+            if (vm.roots.isEmpty()) {
+                Text(
+                    "No folder granted.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            vm.roots.forEach { root ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        root.label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { vm.removeRoot(root) }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Remove ${root.label}")
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onAddFolder, modifier = Modifier.fillMaxWidth()) { Text("Add folder") }
+        }
+
+        SectionCard(
+            title = "Junk rules",
+            subtitle = "Only matched names and extensions can be deleted. Turn off anything you want to keep.",
+        ) {
+            JunkRules.all.forEach { rule ->
+                ToggleRow(
+                    title = rule.label,
+                    subtitle = rule.description,
+                    checked = rule.id !in settings.disabledRules,
+                    onCheckedChange = { vm.setRuleEnabled(rule.id, it) },
+                )
+            }
+        }
+
+        SectionCard(title = "Scan options") {
+            ToggleRow(
+                title = "Include hidden files",
+                subtitle = "Hidden files are skipped by default. Thumbnail caches are always inspected.",
+                checked = settings.includeHidden,
+                onCheckedChange = vm::setIncludeHidden,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text("Smallest duplicate to compare", style = MaterialTheme.typography.bodyMedium)
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                listOf(0L, 1L, 5L, 10L).forEach { mb ->
+                    FilterChip(
+                        selected = settings.minDuplicateMb == mb,
+                        onClick = { vm.setMinDuplicateMb(mb) },
+                        label = { Text(if (mb == 0L) "Any size" else "$mb MB") },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text("Large file threshold", style = MaterialTheme.typography.bodyMedium)
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                listOf(50L, 100L, 250L, 500L).forEach { mb ->
+                    FilterChip(
+                        selected = settings.largeFileMb == mb,
+                        onClick = { vm.setLargeFileMb(mb) },
+                        label = { Text("$mb MB") },
+                    )
+                }
+            }
+        }
+
+        SectionCard(title = "Safety") {
+            ToggleRow(
+                title = "Confirm before deleting",
+                subtitle = "Show a summary of what will be deleted and how much it frees",
+                checked = settings.confirmDeletes,
+                onCheckedChange = vm::setConfirmDeletes,
+            )
+        }
 
         SectionCard(title = "Theme") {
             Row(
@@ -99,13 +177,10 @@ fun SettingsScreen(
                         selected = settings.themeId == ThemeId.custom(theme.id),
                         onClick = { vm.setThemeId(ThemeId.custom(theme.id)) },
                         label = { Text(theme.name) },
-                        leadingIcon = {
-                            Box(Modifier.size(14.dp).background(Color(theme.seed), CircleShape))
-                        },
+                        leadingIcon = { Box(Modifier.size(14.dp).background(Color(theme.seed), CircleShape)) },
                     )
                 }
             }
-
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ThemeMode.entries.forEach { mode ->
@@ -116,33 +191,20 @@ fun SettingsScreen(
                     )
                 }
             }
-
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { showThemeEditor = true }, modifier = Modifier.fillMaxWidth()) {
                 Text("Create theme")
             }
-
-            if (settings.customThemes.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                settings.customThemes.forEach { theme ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(Modifier.size(18.dp).background(Color(theme.seed), CircleShape))
-                        Spacer(Modifier.size(8.dp))
-                        Text(
-                            theme.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { vm.deleteCustomTheme(theme.id) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete ${theme.name}")
-                        }
+            settings.customThemes.forEach { theme ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(18.dp).background(Color(theme.seed), CircleShape))
+                    Spacer(Modifier.size(8.dp))
+                    Text(theme.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { vm.deleteCustomTheme(theme.id) }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete ${theme.name}")
                     }
                 }
             }
-
             ToggleRow(
                 title = "AMOLED black",
                 subtitle = "Pure black surfaces in dark mode",
@@ -151,7 +213,7 @@ fun SettingsScreen(
             )
             ToggleRow(
                 title = "Wallpaper colours",
-                subtitle = "Use Material You colours when the Wallpaper theme is selected",
+                subtitle = "Use Material You colours with the Wallpaper theme",
                 checked = settings.dynamicColor,
                 onCheckedChange = vm::setDynamicColor,
             )
@@ -159,16 +221,13 @@ fun SettingsScreen(
 
         SectionCard(
             title = "Updates",
-            subtitle = "Follows ${RELEASES_URL}; downloads are signature-checked before installing.",
+            subtitle = "Checks github.com/itriedcoding/Modify-X/releases; downloads are signature-checked.",
         ) {
-            Text(
-                "Installed ${update.currentVersion.ifBlank { version }}",
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Text("Installed ${update.currentVersion.ifBlank { version }}", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(6.dp))
             ToggleRow(
                 title = "Check automatically",
-                subtitle = "Once a day when the app opens",
+                subtitle = "At most once a day when the app opens",
                 checked = settings.autoUpdateCheck,
                 onCheckedChange = vm::setAutoUpdateCheck,
             )
@@ -179,116 +238,30 @@ fun SettingsScreen(
             ) {
                 Text(if (update.checking) "Checking…" else "Check for updates")
             }
-
             Spacer(Modifier.height(10.dp))
             UpdateSection(state = update, onInstall = vm::downloadAndInstallUpdate)
-        }
-
-        SectionCard(title = "Browsing") {
-            ToggleRow(
-                title = "Only known bloatware",
-                subtitle = "Hide packages that are not in the curated catalog",
-                checked = settings.showCatalogOnly,
-                onCheckedChange = vm::setCatalogOnly,
-            )
-            Text(
-                if (vm.usageAccessGranted) {
-                    "Usage access is granted: the Unused filter and last-used times come from real usage stats."
-                } else {
-                    "Usage access is not granted, so last-used times and the Unused filter are unavailable."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = vm::openUsageAccessSettings, modifier = Modifier.fillMaxWidth()) {
-                Text(if (vm.usageAccessGranted) "Manage usage access" else "Grant usage access")
-            }
-        }
-
-        SectionCard(
-            title = "Safety",
-            subtitle = "These guards are off by default because they allow changes that can break a device.",
-        ) {
-            ToggleRow(
-                title = "Allow risky actions",
-                subtitle = "Permit packages the catalog marks as risky (Play services, launchers, …)",
-                checked = settings.allowRisky,
-                onCheckedChange = vm::setAllowRisky,
-            )
-            ToggleRow(
-                title = "Allow protected packages",
-                subtitle = "Permit touching core Android packages. A mis-tap here can brick the ROM.",
-                checked = settings.allowProtected,
-                onCheckedChange = vm::setAllowProtected,
-            )
-            ToggleRow(
-                title = "Confirm destructive actions",
-                subtitle = "Ask before uninstalling or clearing data",
-                checked = settings.confirmDestructive,
-                onCheckedChange = vm::setConfirmDestructive,
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { showProtected = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("View protected packages (${BloatCatalog.protectedPackages.size})")
-            }
-        }
-
-        SectionCard(title = "Tools") {
-            OutlinedButton(onClick = onOpenConsole, modifier = Modifier.fillMaxWidth()) {
-                Text("Shell console")
-            }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onOpenBackup, modifier = Modifier.fillMaxWidth()) {
-                Text("Backup & restore")
-            }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = vm::detectPrivileges, modifier = Modifier.fillMaxWidth()) {
-                Text("Re-detect privileges (${privileges.summary})")
-            }
-            ToggleRow(
-                title = "Reconnect ADB on launch",
-                subtitle = "Try adbd on port ${settings.adbPort} when the app starts",
-                checked = settings.adbAutoConnect,
-                onCheckedChange = vm::setAdbAutoConnect,
-            )
         }
 
         SectionCard(title = "About") {
             Text("Modify-X $version", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(6.dp))
             Text(
-                "A local debloater. Package changes go through root or the built-in ADB bridge and every " +
-                    "result is read back from the platform. The only network request is reading this project's " +
-                    "public GitHub release page for updates.",
+                "A local storage cleaner. It reads and deletes only the folders you grant through Android's file picker. " +
+                    "Nothing is uploaded, and the only network request is checking the release page for updates.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
-            Text(
-                "Uninstall for user 0 uses `pm uninstall --user 0`; restore uses `pm install-existing --user 0`. " +
-                    "Everything else is a thin, verified wrapper around platform commands.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            OutlinedButton(onClick = vm::replayOnboarding, modifier = Modifier.fillMaxWidth()) {
+                Text("Show welcome again")
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = vm::refreshRoots, modifier = Modifier.fillMaxWidth()) {
+                Text("Re-check folder access")
+            }
         }
 
         Spacer(Modifier.height(16.dp))
-    }
-
-    if (showProtected) {
-        AlertDialog(
-            onDismissRequest = { showProtected = false },
-            title = { Text("Protected packages") },
-            text = {
-                LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                    items(BloatCatalog.protectedPackages.toList().sorted()) { pkg ->
-                        Text(pkg, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(vertical = 2.dp))
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showProtected = false }) { Text("Close") } },
-        )
     }
 
     if (showThemeEditor) {
@@ -303,13 +276,10 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun ThemeEditorDialog(
-    onDismiss: () -> Unit,
-    onSave: (String, Long) -> Unit,
-) {
+private fun ThemeEditorDialog(onDismiss: () -> Unit, onSave: (String, Long) -> Unit) {
     var name by remember { mutableStateOf("My theme") }
-    var hue by remember { mutableStateOf(160f) }
-    var saturation by remember { mutableStateOf(0.65f) }
+    var hue by remember { mutableFloatStateOf(160f) }
+    var saturation by remember { mutableFloatStateOf(0.65f) }
 
     val primary = Palette.argb(hue, saturation, 0.45f)
     val container = Palette.argb(hue, saturation * 0.5f, 0.9f)
@@ -335,11 +305,7 @@ private fun ThemeEditorDialog(
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(primary, container, accent).forEach { swatch ->
-                        Box(
-                            Modifier
-                                .size(48.dp)
-                                .background(Color(swatch), CircleShape),
-                        )
+                        Box(Modifier.size(48.dp).background(Color(swatch), CircleShape))
                     }
                 }
             }
@@ -350,5 +316,3 @@ private fun ThemeEditorDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
-
-private const val RELEASES_URL = "github.com/itriedcoding/Modify-X/releases"

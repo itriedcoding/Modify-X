@@ -1,6 +1,7 @@
 package dev.modifyx.ui
 
 import android.app.Application
+import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -8,428 +9,342 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.modifyx.container
-import dev.modifyx.core.BootProfileReceiver
-import dev.modifyx.core.PrivilegeManager
 import dev.modifyx.core.UpdateChecker
-import dev.modifyx.data.AppDetails
-import dev.modifyx.data.AppEntry
-import dev.modifyx.data.AppFilter
 import dev.modifyx.data.AppSettings
-import dev.modifyx.data.AppSnapshot
-import dev.modifyx.data.BackupDocument
-import dev.modifyx.data.BackupManager
-import dev.modifyx.data.BloatCatalog
-import dev.modifyx.data.ComponentRow
+import dev.modifyx.data.CleanupReport
 import dev.modifyx.data.CustomTheme
-import dev.modifyx.data.DebloatAction
-import dev.modifyx.data.HistoryRecord
-import dev.modifyx.data.PackageRepository
-import dev.modifyx.data.Profile
-import dev.modifyx.data.RiskLevel
-import dev.modifyx.data.SnapshotFile
-import dev.modifyx.data.SortMode
-import dev.modifyx.data.StandbyBucket
+import dev.modifyx.data.DeleteTarget
+import dev.modifyx.data.DuplicateGroup
+import dev.modifyx.data.EmptyFolder
+import dev.modifyx.data.ScanResult
+import dev.modifyx.data.ScanRoot
+import dev.modifyx.data.ScannedFile
 import dev.modifyx.data.ThemeMode
-import dev.modifyx.data.UsageAccess
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
+import dev.modifyx.data.TreeScanner
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
-private const val UNUSED_WINDOW_MS = 60L * 24 * 60 * 60 * 1000
+data class ScanProgress(
+    val phase: TreeScanner.Phase,
+    val files: Int,
+    val bytes: Long,
+    val current: String,
+)
+
 private const val AUTO_UPDATE_INTERVAL_MS = 12L * 60 * 60 * 1000
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val container = application.container
-    val repository: PackageRepository = container.repository
+    val resolver = application.contentResolver
 
     val settings = container.settings.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
-    val privileges = PrivilegeManager.state
     val history = container.history.records
 
-    var snapshot by mutableStateOf(AppSnapshot())
+    var roots by mutableStateOf<List<ScanRoot>>(emptyList())
         private set
-    var loading by mutableStateOf(true)
+    var scan by mutableStateOf<ScanResult?>(null)
+        private set
+    var scanning by mutableStateOf(false)
+        private set
+    var progress by mutableStateOf<ScanProgress?>(null)
         private set
     var busy by mutableStateOf<Busy?>(null)
         private set
     var notice by mutableStateOf<String?>(null)
 
-    var query by mutableStateOf("")
+    var junkSelection by mutableStateOf<Set<String>>(emptySet())
         private set
-    var selection by mutableStateOf<Set<String>>(emptySet())
+    var duplicateSelection by mutableStateOf<Set<String>>(emptySet())
         private set
-
-    var details by mutableStateOf<AppDetails?>(null)
+    var largeSelection by mutableStateOf<Set<String>>(emptySet())
         private set
-    var detailsLoading by mutableStateOf(false)
-        private set
-
-    var profiles by mutableStateOf<List<Profile>>(emptyList())
-        private set
-    var snapshots by mutableStateOf<List<SnapshotFile>>(emptyList())
-        private set
-    var importPreview by mutableStateOf<ImportPreview?>(null)
-        private set
-
-    var console by mutableStateOf(ConsoleState())
-        private set
-
-    var adbBusy by mutableStateOf(false)
-        private set
-    var adbMessage by mutableStateOf<String?>(null)
-        private set
-
-    var components by mutableStateOf<List<ComponentRow>>(emptyList())
-        private set
-    var componentsLoading by mutableStateOf(false)
-        private set
-    var componentBusy by mutableStateOf<String?>(null)
-        private set
-
-    var standby by mutableStateOf<StandbyBucket?>(null)
+    var folderSelection by mutableStateOf<Set<String>>(emptySet())
         private set
 
     var update by mutableStateOf(UpdateState())
         private set
-    var usageAccessGranted by mutableStateOf(false)
-        private set
+
+    private val cancelRequested = AtomicBoolean(false)
 
     init {
         viewModelScope.launch {
             container.history.ensureLoaded()
-            container.profiles.ensureLoaded()
-            refreshProfiles()
-            refreshSnapshots()
-        }
-        refresh()
-        refreshUsageAccess()
-        viewModelScope.launch {
             val stored = container.settings.settings.first()
-            PrivilegeManager.setAdbPort(stored.adbPort)
-            if (stored.adbAutoConnect) PrivilegeManager.refresh()
+            refreshRoots(stored.scanRoots)
             val stale = System.currentTimeMillis() - stored.lastUpdateCheck > AUTO_UPDATE_INTERVAL_MS
             if (stored.autoUpdateCheck && stale) checkForUpdates()
         }
     }
 
-    // --- loading ---
+    // --- folders ---
 
-    fun refresh() {
+    fun addRoot(uri: Uri) {
+        val resolver = getApplication<Application>().contentResolver
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        val persisted = runCatching { resolver.takePersistableUriPermission(uri, flags) }.isSuccess
         viewModelScope.launch {
-            loading = true
-            PrivilegeManager.refresh()
-            snapshot = container.repository.loadSnapshot()
-            refreshProfiles()
-            loading = false
-        }
-    }
-
-    fun detectPrivileges() {
-        viewModelScope.launch { PrivilegeManager.refresh() }
-    }
-
-    fun connectAdb(port: Int) {
-        if (adbBusy) return
-        viewModelScope.launch {
-            adbBusy = true
-            val error = PrivilegeManager.connectAdb(port)
-            container.settings.setAdbPort(port)
-            adbBusy = false
-            adbMessage = error ?: "Connected to adbd on port $port as the shell user."
-        }
-    }
-
-    fun disconnectAdb() {
-        PrivilegeManager.disconnectAdb()
-        adbMessage = "Disconnected from adbd."
-    }
-
-    fun dismissAdbMessage() {
-        adbMessage = null
-    }
-
-    fun setAdbAutoConnect(value: Boolean) = viewModelScope.launch { container.settings.setAdbAutoConnect(value) }
-
-    private suspend fun reloadAfterChange() {
-        snapshot = container.repository.loadSnapshot()
-        refreshProfiles()
-    }
-
-    // --- list filtering ---
-
-    fun updateQuery(value: String) {
-        query = value
-    }
-
-    fun visibleApps(settings: AppSettings): List<AppEntry> {
-        val needle = query.trim().lowercase()
-        var sequence = snapshot.apps.asSequence()
-        sequence = when (settings.filter) {
-            AppFilter.ALL -> sequence
-            AppFilter.SYSTEM -> sequence.filter { it.isSystem && it.installedForUser }
-            AppFilter.USER -> sequence.filter { it.isUserApp && it.installedForUser }
-            AppFilter.BLOAT -> sequence.filter { BloatCatalog.find(it.packageName) != null }
-            AppFilter.REMOVED -> sequence.filter { it.removedForUser }
-            AppFilter.DISABLED -> sequence.filter { it.disabled }
-            AppFilter.UNUSED -> if (!usageAccessGranted) {
-                emptySequence()
+            container.settings.addScanRoot(uri.toString())
+            refreshRoots(container.settings.settings.first().scanRoots)
+            notice = if (persisted) {
+                "Folder added. Its files are readable and deletable while this grant lasts."
             } else {
-                val cutoff = System.currentTimeMillis() - UNUSED_WINDOW_MS
-                sequence.filter { it.installedForUser && (it.lastUsedAt == 0L || it.lastUsedAt < cutoff) }
+                "Folder added, but Android did not persist the permission. Re-add it if a scan fails."
             }
         }
-        if (settings.showCatalogOnly) {
-            sequence = sequence.filter { BloatCatalog.find(it.packageName) != null }
-        }
-        if (needle.isNotEmpty()) {
-            sequence = sequence.filter {
-                it.label.lowercase().contains(needle) || it.packageName.lowercase().contains(needle)
-            }
-        }
-        val sorted = when (settings.sortMode) {
-            SortMode.NAME -> sequence.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
-            SortMode.SIZE -> sequence.sortedByDescending { it.apkBytes }
-            SortMode.INSTALLED -> sequence.sortedByDescending { it.firstInstallTime }
-            SortMode.UPDATED -> sequence.sortedByDescending { it.lastUpdateTime }
-        }
-        return sorted.toList()
     }
 
-    // --- selection ---
-
-    fun toggleSelection(pkg: String) {
-        selection = if (pkg in selection) selection - pkg else selection + pkg
-    }
-
-    fun clearSelection() {
-        selection = emptySet()
-    }
-
-    fun selectAll(apps: List<AppEntry>) {
-        selection = apps.map { it.packageName }.toSet()
-    }
-
-    // --- actions ---
-
-    /** Why an action would be refused for this package, or null when it is allowed. */
-    fun blockReason(app: AppEntry, settings: AppSettings): String? {
-        if (BloatCatalog.isProtected(app.packageName) && !settings.allowProtected) {
-            return "Core Android package. Enable the protected-package override in Settings to touch it."
+    fun removeRoot(root: ScanRoot) {
+        runCatching {
+            getApplication<Application>().contentResolver.releasePersistableUriPermission(
+                Uri.parse(root.uri),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
         }
-        val risk = BloatCatalog.find(app.packageName)?.risk
-        if (risk == RiskLevel.RISKY && !settings.allowRisky) {
-            return "The catalog marks this as risky. Enable risky actions in Settings to continue."
-        }
-        return null
-    }
-
-    fun applicableTargets(action: DebloatAction, apps: List<AppEntry>, settings: AppSettings): List<AppEntry> =
-        apps.filter { app ->
-            blockReason(app, settings) == null && when (action) {
-                DebloatAction.UNINSTALL_FOR_USER -> app.installedForUser
-                DebloatAction.RESTORE_FOR_USER -> app.removedForUser
-                DebloatAction.DISABLE -> app.installedForUser && app.enabled
-                DebloatAction.ENABLE -> app.installedForUser && !app.enabled
-                DebloatAction.CLEAR_DATA, DebloatAction.FORCE_STOP -> app.installedForUser
-                DebloatAction.UNINSTALL_FULL -> app.isUserApp && app.installedForUser
-            }
-        }
-
-    fun runSingle(action: DebloatAction, app: AppEntry) {
         viewModelScope.launch {
-            val result = container.runner.run(action, app)
-            notice = "${app.label}: ${result.message}"
-            reloadAfterChange()
+            container.settings.removeScanRoot(root.uri)
+            refreshRoots(container.settings.settings.first().scanRoots)
+            notice = "${root.label} is no longer scanned."
         }
     }
 
-    fun runBatch(action: DebloatAction, apps: List<AppEntry>) {
-        if (apps.isEmpty()) {
-            notice = "Nothing to do for ${action.title.lowercase()}."
+    fun refreshRoots() = viewModelScope.launch {
+        refreshRoots(container.settings.settings.first().scanRoots)
+    }
+
+    private fun refreshRoots(stored: List<String>) {
+        roots = stored.mapNotNull { raw ->
+            runCatching { container.scanner.describe(Uri.parse(raw)) }.getOrNull()
+        }
+    }
+
+    // --- scanning ---
+
+    fun startScan() {
+        if (scanning) return
+        val current = settings.value
+        val granted = roots
+        if (granted.isEmpty()) {
+            notice = "Add at least one folder before scanning."
+            return
+        }
+        cancelRequested.set(false)
+        scanning = true
+        progress = ScanProgress(TreeScanner.Phase.WALKING, 0, 0L, "Opening ${granted.size} folder(s)")
+        viewModelScope.launch {
+            val result = runCatching {
+                container.scanner.scan(
+                    roots = granted,
+                    options = TreeScanner.Options(
+                        includeHidden = current.includeHidden,
+                        minDuplicateBytes = current.minDuplicateBytes,
+                        enabledRuleIds = current.enabledRuleIds,
+                    ),
+                    onProgress = { update ->
+                        viewModelScope.launch {
+                            progress = ScanProgress(update.phase, update.files, update.bytes, update.current)
+                        }
+                    },
+                    isCancelled = { cancelRequested.get() },
+                )
+            }.getOrElse { error ->
+                notice = "Scan failed: ${error.message ?: "unknown error"}"
+                null
+            }
+            scanning = false
+            progress = null
+            if (result != null) {
+                scan = result
+                junkSelection = result.junk.filter { it.safe }.map { it.file.uri }.toSet()
+                duplicateSelection = result.duplicates.flatMap { it.copies }.map { it.uri }.toSet()
+                largeSelection = emptySet()
+                folderSelection = emptySet()
+                container.settings.setLastScan(result.scannedAt, result.bytesScanned)
+                notice = when {
+                    result.cancelled -> "Scan cancelled. Partial results are shown."
+                    else -> "Scanned ${result.files.size} files (${formatBytes(result.bytesScanned)}) in ${formatDuration(result.durationMs)}."
+                }
+            }
+        }
+    }
+
+    fun cancelScan() {
+        if (scanning) {
+            cancelRequested.set(true)
+            notice = "Stopping the scan after the current folder…"
+        }
+    }
+
+    // --- selections ---
+
+    fun toggleJunk(uri: String) {
+        junkSelection = if (uri in junkSelection) junkSelection - uri else junkSelection + uri
+    }
+
+    fun selectJunk(safeOnly: Boolean) {
+        val findings = scan?.junk ?: return
+        junkSelection = findings.filter { !safeOnly || it.safe }.map { it.file.uri }.toSet()
+    }
+
+    fun clearJunkSelection() {
+        junkSelection = emptySet()
+    }
+
+    fun toggleDuplicate(uri: String) {
+        duplicateSelection = if (uri in duplicateSelection) duplicateSelection - uri else duplicateSelection + uri
+    }
+
+    fun selectDuplicateCopies() {
+        duplicateSelection = scan?.duplicates?.flatMap { it.copies }?.map { it.uri }?.toSet() ?: emptySet()
+    }
+
+    fun clearDuplicateSelection() {
+        duplicateSelection = emptySet()
+    }
+
+    fun toggleLarge(uri: String) {
+        largeSelection = if (uri in largeSelection) largeSelection - uri else largeSelection + uri
+    }
+
+    fun selectLarge(threshold: Long) {
+        largeSelection = scan?.largeFiles(threshold)?.map { it.uri }?.toSet() ?: emptySet()
+    }
+
+    fun clearLargeSelection() {
+        largeSelection = emptySet()
+    }
+
+    fun toggleFolder(uri: String) {
+        folderSelection = if (uri in folderSelection) folderSelection - uri else folderSelection + uri
+    }
+
+    fun selectAllFolders() {
+        folderSelection = scan?.emptyFolders?.map { it.uri }?.toSet() ?: emptySet()
+    }
+
+    fun clearFolderSelection() {
+        folderSelection = emptySet()
+    }
+
+    fun junkBytesSelected(): Long {
+        val selected = junkSelection
+        return scan?.junk?.filter { it.file.uri in selected }?.sumOf { it.file.size } ?: 0L
+    }
+
+    fun duplicateBytesSelected(): Long {
+        val selected = duplicateSelection
+        return scan?.duplicates.orEmpty()
+            .flatMap { it.files }
+            .filter { it.uri in selected }
+            .distinctBy { it.uri }
+            .sumOf { it.size }
+    }
+
+    fun largeBytesSelected(): Long {
+        val selected = largeSelection
+        return scan?.files?.filter { it.uri in selected }?.sumOf { it.size } ?: 0L
+    }
+
+    fun selectedJunkTargets(): List<DeleteTarget> {
+        val selected = junkSelection
+        return scan?.junk.orEmpty().filter { it.file.uri in selected }.map { it.file.toTarget() }
+    }
+
+    fun selectedDuplicateTargets(): List<DeleteTarget> {
+        val selected = duplicateSelection
+        return scan?.duplicates.orEmpty()
+            .flatMap { it.files }
+            .filter { it.uri in selected }
+            .distinctBy { it.uri }
+            .map { it.toTarget() }
+    }
+
+    fun selectedLargeTargets(): List<DeleteTarget> {
+        val selected = largeSelection
+        return scan?.files.orEmpty().filter { it.uri in selected }.map { it.toTarget() }
+    }
+
+    fun selectedFolderTargets(): List<DeleteTarget> {
+        val selected = folderSelection
+        return scan?.emptyFolders.orEmpty()
+            .filter { it.uri in selected }
+            .map { DeleteTarget(it.uri, it.name, 0L, directory = true) }
+    }
+
+    // --- cleanup ---
+
+    fun cleanJunk() = clean(selectedJunkTargets(), "Junk files")
+    fun cleanDuplicates() = clean(selectedDuplicateTargets(), "Duplicate files")
+    fun cleanLargeFiles() = clean(selectedLargeTargets(), "Large files")
+    fun cleanEmptyFolders() = clean(selectedFolderTargets(), "Empty folders")
+
+    private fun clean(targets: List<DeleteTarget>, label: String) {
+        if (targets.isEmpty()) {
+            notice = "Nothing is selected."
             return
         }
         viewModelScope.launch {
-            busy = Busy(action.title, 0, apps.size, apps.first().label)
-            val summary = container.runner.runBatch(action, apps) { done, total, app ->
-                busy = Busy(action.title, done, total, app.label)
+            busy = Busy(label, 0, targets.size, targets.first().name)
+            val report: CleanupReport = runCatching {
+                container.cleaner.delete(targets, label) { done, total, name ->
+                    busy = Busy(label, done, total, name)
+                }
+            }.getOrElse { error ->
+                busy = null
+                notice = "Cleanup failed: ${error.message ?: "unknown error"}"
+                return@launch
             }
             busy = null
-            selection = emptySet()
-            val failed = summary.failures
-            notice = if (failed == 0) {
-                "${summary.successes} package${if (summary.successes == 1) "" else "s"} ${action.verbPast.lowercase()}."
-            } else {
-                "${summary.successes} succeeded, $failed failed. See History for details."
+            container.history.append(report)
+            prune(report)
+            notice = when {
+                report.deleted == 0 -> "Nothing was deleted. ${report.failed} target(s) were refused by Android."
+                report.failed > 0 -> "${report.deleted} deleted, ${report.failed} refused. ${formatBytes(report.bytesFreed)} freed."
+                else -> "${report.deleted} deleted · ${formatBytes(report.bytesFreed)} freed."
             }
-            reloadAfterChange()
         }
     }
 
-    fun undo(record: HistoryRecord) {
-        viewModelScope.launch {
-            val result = container.runner.undo(record)
-            notice = result?.message ?: "This action cannot be undone."
-            reloadAfterChange()
-        }
+    /** Removes confirmed deletions from the current results so the UI cannot keep offering them. */
+    private fun prune(report: CleanupReport) {
+        val gone = report.outcomes.filter { it.success }.map { it.uri }.toSet()
+        if (gone.isEmpty()) return
+        val current = scan ?: return
+        scan = current.copy(
+            files = current.files.filterNot { it.uri in gone },
+            junk = current.junk.filterNot { it.file.uri in gone },
+            duplicates = current.duplicates.mapNotNull { group ->
+                val left = group.files.filterNot { it.uri in gone }
+                if (left.size < 2) null else group.copy(files = left)
+            },
+            emptyFolders = current.emptyFolders.filterNot { it.uri in gone },
+        )
+        junkSelection = junkSelection - gone
+        duplicateSelection = duplicateSelection - gone
+        largeSelection = largeSelection - gone
+        folderSelection = folderSelection - gone
     }
 
-    fun clearHistory() {
-        viewModelScope.launch {
-            container.history.clear()
-            notice = "History cleared."
-        }
-    }
+    private fun ScannedFile.toTarget() = DeleteTarget(uri = uri, name = name, size = size)
 
     fun consumeNotice() {
         notice = null
     }
 
-    // --- details ---
+    // --- onboarding ---
 
-    fun openDetails(pkg: String) {
-        viewModelScope.launch {
-            detailsLoading = true
-            details = container.repository.loadDetails(pkg)
-            detailsLoading = false
-        }
+    fun finishOnboarding(scanNow: Boolean) {
+        viewModelScope.launch { container.settings.setOnboardingDone(true) }
+        if (scanNow) startScan()
     }
 
-    fun closeDetails() {
-        details = null
-        components = emptyList()
-        standby = null
-    }
+    fun replayOnboarding() = viewModelScope.launch { container.settings.setOnboardingDone(false) }
 
-    // --- component, permission and background controls ---
-
-    fun loadComponents(pkg: String) {
-        viewModelScope.launch {
-            componentsLoading = true
-            components = container.controls.components(pkg)
-            componentsLoading = false
-        }
-    }
-
-    fun toggleComponent(pkg: String, component: String, enable: Boolean) {
-        if (componentBusy != null) return
-        viewModelScope.launch {
-            componentBusy = component
-            val result = container.controls.setComponent(pkg, component, enable)
-            componentBusy = null
-            notice = result.message
-            components = container.controls.components(pkg)
-            snapshot = container.repository.loadSnapshot()
-        }
-    }
-
-    fun setPermission(pkg: String, permission: String, grant: Boolean) {
-        viewModelScope.launch {
-            val result = container.controls.setPermission(pkg, permission, grant)
-            notice = result.message
-            details = container.repository.loadDetails(pkg)
-            snapshot = container.repository.loadSnapshot()
-        }
-    }
-
-    fun loadStandby(pkg: String) {
-        viewModelScope.launch { standby = container.controls.standbyBucket(pkg) }
-    }
-
-    fun setStandby(pkg: String, bucket: StandbyBucket) {
-        viewModelScope.launch {
-            val result = container.controls.setStandbyBucket(pkg, bucket)
-            notice = result.message
-            standby = container.controls.standbyBucket(pkg)
-        }
-    }
-
-    fun entryFor(pkg: String): AppEntry? = snapshot.apps.firstOrNull { it.packageName == pkg }
-
-    // --- console ---
-
-    fun runCommand(command: String) {
-        val trimmed = command.trim()
-        if (trimmed.isEmpty()) return
-        viewModelScope.launch {
-            console = console.copy(running = true, command = trimmed)
-            val result = PrivilegeManager.shell().exec(trimmed, 90_000)
-            console = ConsoleState(
-                running = false,
-                command = trimmed,
-                output = result.output.ifBlank { "(no output)" },
-                exitCode = result.exitCode,
-                durationMs = result.durationMs,
-            )
-        }
-    }
-
-    // --- profiles ---
-
-    fun refreshProfiles() {
-        val installed = snapshot.apps.map { it.packageName }.toSet()
-        profiles = container.profiles.allProfiles(installed)
-    }
-
-    fun saveProfile(name: String, packages: Collection<String>) {
-        val clean = packages.filter { it.isNotBlank() }.distinct()
-        if (name.isBlank() || clean.isEmpty()) {
-            notice = "A profile needs a name and at least one package."
-            return
-        }
-        viewModelScope.launch {
-            container.profiles.create(name.trim(), clean)
-            refreshProfiles()
-            notice = "Saved profile \"${name.trim()}\" with ${clean.size} packages."
-        }
-    }
-
-    fun deleteProfile(profile: Profile) {
-        viewModelScope.launch {
-            container.profiles.delete(profile.id)
-            refreshProfiles()
-            notice = "Deleted \"${profile.name}\"."
-        }
-    }
-
-    fun applyProfile(profile: Profile) {
-        val targets = container.runner.plan(profile, snapshot.apps.associateBy { it.packageName })
-        val settingsNow = settings.value
-        val allowed = applicableTargets(DebloatAction.UNINSTALL_FOR_USER, targets, settingsNow)
-        runBatch(DebloatAction.UNINSTALL_FOR_USER, allowed)
-    }
-
-    fun previewProfile(profile: Profile): List<AppEntry> =
-        container.runner.plan(profile, snapshot.apps.associateBy { it.packageName })
-
-    fun setAutoApply(enabled: Boolean) {
-        viewModelScope.launch { container.settings.setAutoApply(enabled) }
-    }
-
-    fun setAutoApplyProfile(id: String?) {
-        viewModelScope.launch { container.settings.setAutoApplyProfile(id) }
-    }
-
-    // --- usage stats, updates and APK export ---
-
-    fun refreshUsageAccess() {
-        usageAccessGranted = UsageAccess.hasAccess(getApplication())
-    }
-
-    fun openUsageAccessSettings() {
-        UsageAccess.openSettings(getApplication())
-    }
-
-    fun exportApk(pkg: String) {
-        viewModelScope.launch {
-            val result = container.exporter.export(pkg)
-            notice = result.message
-        }
-    }
+    // --- updates ---
 
     fun currentVersionName(): String = runCatching {
         getApplication<Application>().packageManager
@@ -488,30 +403,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Queues the automation run now instead of waiting for the next reboot. */
-    fun runAutomationNow() {
-        BootProfileReceiver.enqueue(getApplication(), delaySeconds = 0L)
-        notice = "Automation queued. Results appear in History."
-    }
-
     // --- settings ---
 
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { container.settings.setTheme(mode) }
     fun setDynamicColor(value: Boolean) = viewModelScope.launch { container.settings.setDynamicColor(value) }
-    fun setFilter(filter: AppFilter) {
-        // A new filter hides rows; keeping them selected would let a batch act on packages
-        // the user can no longer see.
-        if (filter != settings.value.filter) selection = emptySet()
-        viewModelScope.launch { container.settings.setFilter(filter) }
-    }
-    fun setSort(mode: SortMode) = viewModelScope.launch { container.settings.setSortMode(mode) }
-    fun setAllowRisky(value: Boolean) = viewModelScope.launch { container.settings.setAllowRisky(value) }
-    fun setAllowProtected(value: Boolean) = viewModelScope.launch { container.settings.setAllowProtected(value) }
-    fun setConfirmDestructive(value: Boolean) = viewModelScope.launch { container.settings.setConfirmDestructive(value) }
-    fun setCatalogOnly(value: Boolean) = viewModelScope.launch { container.settings.setCatalogOnly(value) }
-    fun setThemeId(id: String) = viewModelScope.launch { container.settings.setThemeId(id) }
     fun setAmoled(value: Boolean) = viewModelScope.launch { container.settings.setAmoled(value) }
+    fun setThemeId(id: String) = viewModelScope.launch { container.settings.setThemeId(id) }
+    fun setIncludeHidden(value: Boolean) = viewModelScope.launch { container.settings.setIncludeHidden(value) }
+    fun setMinDuplicateMb(value: Long) = viewModelScope.launch { container.settings.setMinDuplicateMb(value) }
+    fun setLargeFileMb(value: Long) = viewModelScope.launch { container.settings.setLargeFileMb(value) }
+    fun setConfirmDeletes(value: Boolean) = viewModelScope.launch { container.settings.setConfirmDeletes(value) }
     fun setAutoUpdateCheck(value: Boolean) = viewModelScope.launch { container.settings.setAutoUpdateCheck(value) }
+    fun setRuleEnabled(id: String, value: Boolean) = viewModelScope.launch { container.settings.setRuleEnabled(id, value) }
 
     fun saveCustomTheme(name: String, seed: Long) {
         viewModelScope.launch {
@@ -523,125 +426,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteCustomTheme(id: String) = viewModelScope.launch { container.settings.deleteCustomTheme(id) }
 
-    // --- backups ---
-
-    fun refreshSnapshots() {
-        snapshots = container.backups.listLocal()
+    fun clearHistory() = viewModelScope.launch {
+        container.history.clear()
+        notice = "Cleanup history cleared."
     }
 
-    fun exportBackup(uri: Uri) {
-        viewModelScope.launch {
-            val document = BackupManager.buildDocument(snapshot.apps)
-            val payload = BackupManager.toJson(document)
-            val ok = withContext(Dispatchers.IO) {
-                runCatching {
-                    getApplication<Application>().contentResolver.openOutputStream(uri)?.use { stream ->
-                        stream.write(payload.toByteArray())
-                    } ?: error("Could not open the selected file")
-                }.isSuccess
-            }
-            notice = if (ok) {
-                "Exported snapshot: ${document.entries.size} packages, ${document.removedCount} removed."
-            } else {
-                "Export failed. Check storage permissions for the chosen location."
-            }
-            refreshSnapshots()
-        }
+    fun duplicateGroupsFor(category: dev.modifyx.data.FileCategory?): List<DuplicateGroup> {
+        val groups = scan?.duplicates.orEmpty()
+        return if (category == null) groups else groups.filter { it.category == category }
     }
 
-    fun saveLocalSnapshot() {
-        viewModelScope.launch {
-            val document = BackupManager.buildDocument(snapshot.apps)
-            withContext(Dispatchers.IO) { container.backups.saveLocal(document) }
-            refreshSnapshots()
-            notice = "Snapshot saved on the device."
-        }
-    }
-
-    fun importBackup(uri: Uri) {
-        viewModelScope.launch {
-            val text = withContext(Dispatchers.IO) {
-                runCatching {
-                    getApplication<Application>().contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
-                }.getOrNull()
-            }
-            if (text == null) {
-                notice = "Could not read that file."
-                return@launch
-            }
-            val document = runCatching { BackupManager.parse(text) }.getOrElse {
-                notice = "Not a valid Modify-X backup: ${it.message}"
-                return@launch
-            }
-            val restorable = BackupManager.restoreCandidates(document, snapshot.apps)
-            val current = snapshot.apps.associateBy { it.packageName }
-            val reRemovable = document.entries.count { it.isRemoved && current[it.packageName]?.installedForUser == true }
-            importPreview = ImportPreview(document, restorable.size, reRemovable)
-        }
-    }
-
-    fun cancelImport() {
-        importPreview = null
-    }
-
-    fun applyImportedRemovals() {
-        val preview = importPreview ?: return
-        val current = snapshot.apps.associateBy { it.packageName }
-        val targets = preview.document.entries
-            .filter { it.isRemoved }
-            .mapNotNull { entry -> current[entry.packageName]?.takeIf { it.installedForUser } }
-        importPreview = null
-        runBatch(DebloatAction.UNINSTALL_FOR_USER, applicableTargets(DebloatAction.UNINSTALL_FOR_USER, targets, settings.value))
-    }
-
-    fun restoreImportedPackages() {
-        val preview = importPreview ?: return
-        val installedNow = snapshot.apps.filter { it.installedForUser }.map { it.packageName }.toSet()
-        val targets = preview.document.entries
-            .filter { it.isRemoved && it.packageName !in installedNow }
-            .map { entry ->
-                AppEntry(
-                    packageName = entry.packageName,
-                    label = entry.label,
-                    isSystem = entry.system,
-                    isUpdatedSystem = false,
-                    enabled = false,
-                    installedForUser = false,
-                    suspended = false,
-                    versionName = null,
-                    versionCode = 0,
-                    targetSdk = 0,
-                    minSdk = 0,
-                    firstInstallTime = 0L,
-                    lastUpdateTime = 0L,
-                    apkBytes = 0L,
-                    uid = -1,
-                    launchable = false,
-                    installer = null,
-                )
-            }
-        importPreview = null
-        runBatch(DebloatAction.RESTORE_FOR_USER, targets)
-    }
-
-    fun restoreSnapshot(file: SnapshotFile) {
-        viewModelScope.launch {
-            val document = runCatching { withContext(Dispatchers.IO) { container.backups.readLocal(file.file) } }.getOrNull()
-            if (document == null) {
-                notice = "That snapshot could not be read."
-                return@launch
-            }
-            val current = snapshot.apps.associateBy { it.packageName }
-            val restorable = BackupManager.restoreCandidates(document, snapshot.apps)
-            val reRemovable = document.entries.count { it.isRemoved && current[it.packageName]?.installedForUser == true }
-            importPreview = ImportPreview(document, restorable.size, reRemovable)
-        }
-    }
-
-    fun deleteSnapshot(file: SnapshotFile) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { container.backups.deleteLocal(file.file) }
-            refreshSnapshots()
-        }
-    }
+    fun emptyFolders(): List<EmptyFolder> = scan?.emptyFolders.orEmpty()
 }

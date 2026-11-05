@@ -1,60 +1,72 @@
 package dev.modifyx.ui.screens
 
-import android.os.Build
+import android.os.Environment
+import android.os.StatFs
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.modifyx.data.DebloatAction
-import dev.modifyx.ui.components.PrivilegeCard
+import dev.modifyx.data.ScanResult
+import dev.modifyx.ui.MainViewModel
+import dev.modifyx.ui.components.InlineProgress
+import dev.modifyx.ui.components.ScreenHeader
 import dev.modifyx.ui.components.SectionCard
+import dev.modifyx.ui.components.SectionAction
 import dev.modifyx.ui.components.StatTile
-import dev.modifyx.ui.components.UpdateSection
+import dev.modifyx.ui.components.StorageBar
 import dev.modifyx.ui.formatAgo
 import dev.modifyx.ui.formatBytes
-import dev.modifyx.ui.MainViewModel
 
 @Composable
 fun HomeScreen(
     vm: MainViewModel,
-    onOpenApps: () -> Unit,
-    onOpenProfiles: () -> Unit,
-    onOpenBackup: () -> Unit,
+    onOpenJunk: () -> Unit,
+    onOpenDuplicates: () -> Unit,
+    onOpenExplore: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onAddFolder: () -> Unit,
 ) {
-    val privileges by vm.privileges.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
-    val snapshot = vm.snapshot
+    val scan = vm.scan
+    val scanning = vm.scanning
+    val progress = vm.progress
+    val roots = vm.roots
 
-    val installed = snapshot.apps.filter { it.installedForUser }
-    val removed = snapshot.apps.filter { it.removedForUser }
-    val disabled = snapshot.apps.filter { it.disabled }
-    val reclaimable = (removed + disabled).sumOf { it.apkBytes }
+    val storage = remember {
+        runCatching {
+            val stat = StatFs(Environment.getDataDirectory().path)
+            stat.availableBytes to stat.totalBytes
+        }.getOrDefault(0L to 0L)
+    }
+    val usedFraction = if (storage.second > 0) (storage.second - storage.first).toFloat() / storage.second else 0f
 
     Column(
         modifier = Modifier
@@ -63,133 +75,237 @@ fun HomeScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column {
-            Text("Modify-X", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        ScreenHeader(
+            title = "Modify-X",
+            subtitle = "Storage cleaner · everything stays on this device",
+            trailing = {
+                IconButton(onClick = onOpenHistory) {
+                    Icon(Icons.Default.DateRange, contentDescription = "Cleanup history")
+                }
+            },
+        )
+
+        SectionCard(title = "Device storage") {
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                StatTile("free", formatBytes(storage.first), Modifier.weight(1f))
+                StatTile("used", formatBytes(storage.second - storage.first), Modifier.weight(1f))
+                StatTile("total", formatBytes(storage.second), Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(12.dp))
+            StorageBar(
+                usedFraction = usedFraction,
+                label = "${(usedFraction * 100).toInt()}% of shared storage in use",
             )
         }
 
-        PrivilegeCard(
-            state = privileges,
-            adbBusy = vm.adbBusy,
-            adbMessage = vm.adbMessage,
-            onDetect = vm::detectPrivileges,
-            onConnectAdb = vm::connectAdb,
-            onDisconnectAdb = vm::disconnectAdb,
-            onDismissMessage = vm::dismissAdbMessage,
-        )
-
-        val available = vm.update.available
-        if (available != null) {
-            SectionCard(title = "Update available · ${available.version}") {
-                UpdateSection(state = vm.update, onInstall = vm::downloadAndInstallUpdate)
+        SectionCard(
+            title = "Folders",
+            subtitle = if (roots.isEmpty()) {
+                "Nothing is scannable until you grant a folder."
+            } else {
+                "${roots.size} folder(s) granted through Android's file picker"
+            },
+        ) {
+            roots.forEach { root ->
+                Text(
+                    "· ${root.label}",
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (roots.isEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                SectionAction(label = "Choose a folder", onClick = onAddFolder, primary = true)
+            } else {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onAddFolder, modifier = Modifier.weight(1f)) { Text("Add folder") }
+                    OutlinedButton(onClick = onOpenSettings, modifier = Modifier.weight(1f)) { Text("Manage") }
+                }
             }
         }
 
-        SectionCard(title = "Device overview") {
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                StatTile("installed", installed.size.toString(), Modifier.weight(1f))
-                StatTile("system", installed.count { it.isSystem }.toString(), Modifier.weight(1f))
-                StatTile("user", installed.count { it.isUserApp }.toString(), Modifier.weight(1f))
+        SectionCard(title = "Scan") {
+            if (scanning) {
+                InlineProgress(progress?.current ?: "Scanning…")
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "${progress?.files ?: 0} files · ${formatBytes(progress?.bytes ?: 0L)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = vm::cancelScan, modifier = Modifier.fillMaxWidth()) { Text("Stop scan") }
+            } else {
+                Button(
+                    onClick = vm::startScan,
+                    enabled = roots.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (scan == null) "Scan my folders" else "Scan again") }
+                if (scan != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Last scan ${formatAgo(scan.scannedAt)} · ${scan.files.size} files · ${formatBytes(scan.bytesScanned)}" +
+                            if (scan.cancelled) " · partial" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (roots.isEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Add a folder first — Modify-X has no storage permission and can only see what you hand it.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                StatTile("removed", removed.size.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
-                StatTile("disabled", disabled.size.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.tertiary)
-                StatTile("reclaimed", formatBytes(reclaimable), Modifier.weight(1f))
-            }
-            if (snapshot.warning != null) {
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.width(8.dp))
-                    Text(snapshot.warning!!, style = MaterialTheme.typography.bodySmall)
+        }
+
+        if (scan != null && !scanning) {
+            Results(
+                scan = scan,
+                largeThreshold = settings.largeFileBytes,
+                onOpenJunk = onOpenJunk,
+                onOpenDuplicates = onOpenDuplicates,
+                onOpenExplore = onOpenExplore,
+            )
+
+            if (scan.warnings.isNotEmpty()) {
+                SectionCard(title = "Scan notes") {
+                    scan.warnings.forEach { warning ->
+                        Text(
+                            "· $warning",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (scan.skippedHidden > 0) {
+                        Text(
+                            "· ${scan.skippedHidden} hidden file(s) skipped. Enable hidden files in Settings to include them.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (scan.tooLargeToHash > 0) {
+                        Text(
+                            "· ${scan.tooLargeToHash} file(s) over 512 MB were left out of duplicate detection.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
 
         SectionCard(
-            title = "Debloat",
-            subtitle = "Package changes require root or the ADB bridge. Nothing is sent off the device.",
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onOpenApps, modifier = Modifier.weight(1f)) { Text("All apps") }
-                OutlinedButton(onClick = onOpenProfiles, modifier = Modifier.weight(1f)) { Text("Presets") }
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpenBackup, modifier = Modifier.weight(1f)) { Text("Backup") }
-                OutlinedButton(onClick = onOpenHistory, modifier = Modifier.weight(1f)) { Text("History") }
-            }
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = vm::refresh) {
-                Icon(Icons.Default.Refresh, null, modifier = Modifier.width(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Rescan packages")
-            }
-        }
-
-        SectionCard(
-            title = "Recent activity",
-            subtitle = if (history.isEmpty()) "Nothing has been changed yet." else null,
+            title = "Recent cleanups",
+            subtitle = if (history.isEmpty()) "Nothing deleted yet." else null,
         ) {
             if (history.isEmpty()) {
                 Text(
-                    "Actions you run are recorded here with their real exit status.",
+                    "Deletions are logged here with the exact amount of space the platform confirmed was freed.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                history.take(5).forEach { record ->
+                history.take(3).forEach { record ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            if (record.success) Icons.Default.CheckCircle else Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = if (record.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        )
-                        Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
+                            Text(record.label, style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                "${record.action.title} · ${record.label}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                formatAgo(record.timestamp),
+                                "${formatAgo(record.timestamp)} · ${record.deleted} deleted" +
+                                    if (record.failed > 0) " · ${record.failed} refused" else "",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        Text(formatBytes(record.bytesFreed), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                TextButton(onClick = onOpenHistory) { Text("Open full history") }
+                TextButton(onClick = onOpenHistory) { Text("View all") }
             }
         }
 
-        SectionCard(title = "Safety") {
+        SectionCard(title = "Privacy") {
             Row(verticalAlignment = Alignment.Top) {
-                Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Uninstall for user 0 removes an app for you without touching the system partition, and can be undone with Restore. Core packages are blocked by default. Take a snapshot before large changes.",
+                    "Files are read and deleted on the device. The only network request is checking this project's GitHub release page for updates. There are no accounts, ads, or analytics.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
 
         Text(
-            "Removing packages can break features you rely on. Every action is reversible from History while the package data still exists.",
+            "Settings: duplicates " +
+                (if (settings.minDuplicateMb == 0L) "of any size" else "≥ ${settings.minDuplicateMb} MB") +
+                " · large files ≥ ${settings.largeFileMb} MB",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun Results(
+    scan: ScanResult,
+    largeThreshold: Long,
+    onOpenJunk: () -> Unit,
+    onOpenDuplicates: () -> Unit,
+    onOpenExplore: () -> Unit,
+) {
+    val large = scan.largeFiles(largeThreshold).size
+    SectionCard(title = "Found") {
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            StatTile("reclaimable", formatBytes(scan.reclaimable), Modifier.weight(1f))
+            StatTile("junk", formatBytes(scan.junkBytes), Modifier.weight(1f))
+            StatTile("duplicates", formatBytes(scan.duplicateBytes), Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(14.dp))
+        ResultRow(
+            title = "Junk files",
+            detail = "${scan.junk.size} matched · ${formatBytes(scan.junkBytes)}",
+            onClick = onOpenJunk,
+        )
+        ResultRow(
+            title = "Duplicate files",
+            detail = "${scan.duplicates.size} group(s) · ${formatBytes(scan.duplicateBytes)} reclaimable",
+            onClick = onOpenDuplicates,
+        )
+        ResultRow(
+            title = "Large & empty",
+            detail = "$large large file(s) · ${scan.emptyFolders.size} empty folder(s)",
+            onClick = onOpenExplore,
+        )
+    }
+}
+
+@Composable
+private fun ResultRow(title: String, detail: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                detail,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
     }
 }

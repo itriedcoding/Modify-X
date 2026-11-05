@@ -1,39 +1,45 @@
-# Modify-X 1.4.0
+# Modify-X 2.0.0
 
-A cleanup release. No feature was removed and the auto-updater is untouched: it still
-reads this project's release page, verifies the download against the pinned signing
-certificate and refuses anything that is not newer.
+Modify-X is now a storage cleaner. The debloater is gone: no package manager access, no
+root, no ADB bridge, no package catalogue. In their place is a cleaner that works on the
+files you actually own.
 
-## What changed
+## What it does
 
-- **One screen header everywhere.** Apps, Presets, History, Settings, Backup, Console,
-  Components and App Detail now share the same title/subtitle/back treatment instead of
-  each screen inventing its own row. Apps gained the title it was missing.
-- **One update UI.** The "update available" card lived twice, in Home and Settings, with
-  slightly different wording and progress handling. Both now render a single shared
-  component, so they cannot drift apart.
-- **One switch row.** The settings toggle moved into the shared component set and is reused
-  by the Presets automation section, which previously hand-rolled the same layout.
-- **UI state separated from the ViewModel.** `Busy`, `ConsoleState`, `UpdateState` and
-  `ImportPreview` moved to their own file; the ViewModel no longer mixes data holders with
-  behaviour, and fully-qualified names were replaced with imports.
+- **Junk scan** — temporary files, logs, crash dumps, stale editor backups, Windows
+  metadata, zero-byte files and thumbnail caches, matched by name and extension by rules you
+  can see and switch off.
+- **Duplicate finder** — groups files by exact size, then proves identity with a full
+  SHA-256 hash. Previews are decoded from the real files. Each group has a locked keeper
+  (shortest path, then oldest) and pre-selected copies.
+- **Large files and empty folders** — sorted by real size, with nested empty directories
+  detected bottom-up.
+- **By-type breakdown** — images, video, audio, documents, archives, other.
+- **History** — every cleanup with the byte count Android confirmed, plus refusals.
+- **Animated first-run entry** — three steps, then the folder picker; replayable from
+  Settings.
 
-## Fixes
+## Access model
 
-- Changing the Apps filter while packages were selected left those packages selected but
-  invisible, so a batch could act on rows the user could not see. The selection now clears
-  when the filter changes.
-- The Presets screen read the privilege state outside Compose observation, so the Apply
-  buttons kept a stale enabled state after root or the ADB bridge connected. It is now
-  collected like every other screen.
-- History used horizontal spacers inside a vertical column, which collapsed to zero and
-  jammed failed-action messages against the row above.
-- "Select all" was only offered on the unfiltered list; it now works in every filter and
-  selects exactly the rows on screen.
-- The theme resolver had three branches that all produced the same scheme; it is now a
-  single default branch with identical results.
+No storage permission is requested at all. Folders are granted through Android's own file
+picker and accessed with the Storage Access Framework, so the app can only touch what you
+hand it. Every deletion goes through `DocumentsContract.deleteDocument` and is re-queried
+afterwards; a delete that Android does not really perform is reported as a failure.
+
+## Removed
+
+The package catalogue, package actions, root/ADB shells, ADB protocol client, profiles,
+boot automation, component and permission editors, APK export, backup/restore and the shell
+console. `QUERY_ALL_PACKAGES`, `RECEIVE_BOOT_COMPLETED` and the WorkManager dependency are
+gone with them, and the app now declares only `INTERNET` and `REQUEST_INSTALL_PACKAGES`.
+
+## Updates
+
+The updater is unchanged: it reads this release page, verifies the download against the
+pinned signing certificate, refuses anything that is not newer, and installs over the
+existing app because the signing key is the same.
 
 ## Install
 
-`app-release.apk`, versionCode 6. Updating from 1.3.0 installs in place; the signature and
-version checks in the updater are unchanged.
+`app-release.apk`, versionCode 7. Installing over 1.x replaces the old app in place; its
+settings are not reused because the data model changed.

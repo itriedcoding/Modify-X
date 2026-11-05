@@ -14,8 +14,8 @@ android {
         applicationId = "dev.modifyx"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.4.0"
+        versionCode = 7
+        versionName = "2.0.0"
         resourceConfigurations += listOf("en")
         vectorDrawables.useSupportLibrary = true
     }
@@ -90,8 +90,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("androidx.datastore:datastore-preferences:1.2.1")
-    // Boot automation runs as deferrable work so a reboot cannot truncate it.
-    implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     implementation("androidx.compose.ui:ui")

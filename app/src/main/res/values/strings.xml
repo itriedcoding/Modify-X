@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Modify-X</string>
-    <string name="boot_profile_channel_name">Profile automation</string>
-    <string name="boot_profile_channel_description">Results of profiles applied automatically after boot</string>
 </resources>
