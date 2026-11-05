@@ -33,6 +33,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -162,6 +163,19 @@ fun AppsScreen(
                 },
                 onClear = vm::clearSelection,
             )
+        }
+
+        if (settings.filter == AppFilter.UNUSED && !vm.usageAccessGranted) {
+            Column(Modifier.padding(16.dp)) {
+                EmptyState(
+                    title = "Usage access needed",
+                    message = "Android only reports app usage to apps you authorise. Grant usage access, then return here to see apps unused for 60 days.",
+                )
+                OutlinedButton(
+                    onClick = vm::openUsageAccessSettings,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Grant usage access") }
+            }
         }
 
         HorizontalDivider()

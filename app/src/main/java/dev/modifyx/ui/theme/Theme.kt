@@ -1,6 +1,8 @@
 package dev.modifyx.ui.theme
 
 import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -8,12 +10,13 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import dev.modifyx.data.CustomTheme
+import dev.modifyx.data.ThemeId
 import dev.modifyx.data.ThemeMode
 
 private val DarkScheme = darkColorScheme(
@@ -72,10 +75,20 @@ private val AppTypography = Typography(
     labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, letterSpacing = 0.1.sp),
 )
 
+private fun amoledScheme(base: ColorScheme): ColorScheme = base.copy(
+    background = Color(0xFF000000),
+    surface = Color(0xFF000000),
+    onBackground = Color(0xFFE6E6E6),
+    onSurface = Color(0xFFE6E6E6),
+)
+
 @Composable
 fun ModifyXTheme(
     themeMode: ThemeMode,
     dynamicColor: Boolean,
+    themeId: String,
+    customThemes: List<CustomTheme>,
+    amoled: Boolean,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -84,11 +97,18 @@ fun ModifyXTheme(
         ThemeMode.DARK -> true
     }
     val context = LocalContext.current
+    val custom = customThemes.firstOrNull { ThemeId.custom(it.id) == themeId }
+
     val scheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+        custom != null -> schemeFromSeed(custom.seed, dark, amoled)
+        themeId == ThemeId.DYNAMIC && dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        themeId == ThemeId.DYNAMIC && !dynamicColor ->
+            if (dark) (if (amoled) amoledScheme(DarkScheme) else DarkScheme) else LightScheme
+        dark && amoled -> amoledScheme(DarkScheme)
         dark -> DarkScheme
         else -> LightScheme
     }
+
     MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
 }

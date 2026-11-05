@@ -16,6 +16,9 @@
     <!-- Installing the bundled Shizuku APK; the app itself never touches the network. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- The only network use: reading the project's GitHub release page for updates. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- WorkManager declares this for network constraints, which this app never uses. -->
     <uses-permission
         android:name="android.permission.ACCESS_NETWORK_STATE"

@@ -5,6 +5,7 @@ import android.content.Context
 import dev.modifyx.core.PrivilegeManager
 import dev.modifyx.data.ActionEngine
 import dev.modifyx.data.ActionRunner
+import dev.modifyx.data.ApkExporter
 import dev.modifyx.data.AppControls
 import dev.modifyx.data.BackupManager
 import dev.modifyx.data.HistoryStore
@@ -20,6 +21,7 @@ class AppContainer(context: Context) {
     val backups = BackupManager(context)
     val engine = ActionEngine()
     val controls = AppControls(context, repository)
+    val exporter = ApkExporter()
     val runner = ActionRunner(engine, history, settings)
 }
 

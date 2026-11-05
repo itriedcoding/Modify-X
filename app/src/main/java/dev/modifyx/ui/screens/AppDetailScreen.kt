@@ -54,6 +54,7 @@ import dev.modifyx.ui.components.MonoBlock
 import dev.modifyx.ui.components.RiskBadge
 import dev.modifyx.ui.components.SectionCard
 import dev.modifyx.ui.components.BusyDialog
+import dev.modifyx.ui.formatAgo
 import dev.modifyx.ui.formatBytes
 import dev.modifyx.ui.formatDateTime
 
@@ -219,9 +220,23 @@ fun AppDetailScreen(
             KeyValueRow("Installed", formatDateTime(entry.firstInstallTime))
             KeyValueRow("Updated", formatDateTime(entry.lastUpdateTime))
             KeyValueRow("Installer", entry.installer ?: "unknown")
+            KeyValueRow(
+                "Last used",
+                when {
+                    entry.lastUsedAt > 0L -> formatAgo(entry.lastUsedAt)
+                    vm.usageAccessGranted -> "no recorded use"
+                    else -> "usage access not granted"
+                },
+            )
             KeyValueRow("Launchable", if (entry.launchable) "yes" else "no")
             KeyValueRow("Type", if (entry.isSystem) "system" else "user")
             KeyValueRow("State", if (entry.removedForUser) "removed for user 0" else if (entry.enabled) "enabled" else "disabled")
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { vm.exportApk(packageName) },
+                enabled = privileges.canModify && entry.installedForUser,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Export APK to Downloads") }
         }
 
         if (details == null) {

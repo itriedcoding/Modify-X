@@ -1,38 +1,35 @@
-# Modify-X 1.1.0
+# Modify-X 1.2.0
 
-Shizuku can now be installed from inside the app, and three new per-app controls join the
-existing debloat actions.
+Custom themes, in-app updates, APK export and unused-app detection.
 
-## New in 1.1.0
+## New in 1.2.0
 
-- **One-tap Shizuku setup.** The official Shizuku 13.6.0 APK is bundled, so installing it
-  needs no network access and no browser. The installer verifies the APK checksum and the
-  Rikka signing certificate before doing anything. With root the install is silent; without
-  root the system installer opens with a single confirmation. A "Grant Shizuku" action
-  follows once the service is running.
-- **Component control.** Every activity, service, receiver and provider of a package can be
-  enabled or disabled individually (`pm enable/disable pkg/component`), with the resulting
-  state read back from the platform.
-- **Runtime permissions.** Dangerous permissions can be granted or revoked
-  (`pm grant` / `pm revoke`) and are re-checked afterwards.
-- **App standby buckets.** Read and set the bucket (`am get/set-standby-bucket`) from
-  Exempted down to Never, so a debloated app can also be stopped from waking the device.
-- **Automation that finishes.** Boot automation now runs as WorkManager work instead of
-  inside a broadcast receiver, so a large profile is no longer cut off after a few seconds.
-  A "Run automation now" action was added to Presets.
-- **Runs on older Android.** Package queries used API 33-only overloads and would have
-  crashed on Android 8–12; both paths are now version-guarded.
-- **Navigation fixes.** Console and Backup screens have a back button; the duplicate
-  Play Books catalog entry is gone.
+- **Create your own themes.** Pick a hue and saturation in Settings → Theme; the app
+  derives a complete Material 3 colour scheme from that seed, including containers,
+  secondary/tertiary tones, surfaces and outline. Themes can be renamed, switched and
+  deleted, and work with System/Light/Dark plus a new AMOLED-black surface toggle.
+- **Updates from the release page.** Settings → Updates checks
+  `github.com/itriedcoding/Modify-X/releases`, shows the published notes, downloads the
+  APK and installs it. A download is only accepted when it is signed with the project's
+  release key and is newer than the installed build, so a tampered file cannot take over
+  the app. Checks run at most daily and can be disabled. This is the app's only network
+  request.
+- **Export APK.** In an app's detail screen, copy its base APK and splits to
+  `Download/Modify-X` before removing it, with the copied size read back to confirm.
+- **Unused apps.** With usage access granted, the Unused filter lists apps you have not
+  opened in 60 days, and the detail screen shows a real last-used time. Without access
+  the app says so instead of guessing.
+- **Fewer footguns.** A stalled silent Shizuku install now falls back to the system
+  installer.
 
 ## Install
 
-Download `app-release.apk` and allow installation for your file manager. Root (Magisk,
-KernelSU) or Shizuku is required for any change; without either the app is read-only.
+Download `app-release.apk`. Root (Magisk, KernelSU) or Shizuku is required for any
+package change; without either the app is read-only.
 
 ## Notes
 
 - Uninstall uses `pm uninstall --user 0`, so packages can be restored from History.
-- Backups contain package names and states only. The app has no network permission.
-- The release keystore is committed on purpose: every build is signed with the same key so
-  updates install over each other.
+- Backups contain package names and states only.
+- The release keystore is committed on purpose: every build is signed with the same key
+  so updates install over each other and the in-app updater can verify them.

@@ -55,10 +55,22 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val settings by viewModel.settings.collectAsStateWithLifecycle()
-            ModifyXTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor) {
+            ModifyXTheme(
+                themeMode = settings.themeMode,
+                dynamicColor = settings.dynamicColor,
+                themeId = settings.themeId,
+                customThemes = settings.customThemes,
+                amoled = settings.amoled,
+            ) {
                 AppRoot(viewModel)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Usage access can be granted in system settings while the app is backgrounded.
+        viewModel.refreshUsageAccess()
     }
 }
 

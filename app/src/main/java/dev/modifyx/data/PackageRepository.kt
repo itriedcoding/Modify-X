@@ -42,10 +42,11 @@ class PackageRepository(private val context: Context) {
 
         val apps = ArrayList<AppEntry>(packages.size + 16)
         var warning: String? = null
+        val usage = if (UsageAccess.hasAccess(context)) UsageAccess.lastUsed(context) else emptyMap()
 
         for (info in packages) {
             val appInfo = info.applicationInfo ?: continue
-            apps += info.toEntry(appInfo)
+            apps += info.toEntry(appInfo, usage[info.packageName] ?: 0L)
         }
 
         if (privileged) {
@@ -90,7 +91,7 @@ class PackageRepository(private val context: Context) {
         )
     }
 
-    private fun PackageInfo.toEntry(appInfo: ApplicationInfo): AppEntry {
+    private fun PackageInfo.toEntry(appInfo: ApplicationInfo, lastUsedAt: Long): AppEntry {
         val flags = appInfo.flags
         val system = (flags and ApplicationInfo.FLAG_SYSTEM) != 0
         val updatedSystem = (flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
@@ -117,6 +118,7 @@ class PackageRepository(private val context: Context) {
             uid = appInfo.uid,
             launchable = runCatching { pm.getLaunchIntentForPackage(packageName) != null }.getOrDefault(false),
             installer = installerOf(),
+            lastUsedAt = lastUsedAt,
         )
     }
 

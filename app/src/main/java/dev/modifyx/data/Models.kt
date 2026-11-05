@@ -19,6 +19,8 @@ data class AppEntry(
     val uid: Int,
     val launchable: Boolean,
     val installer: String?,
+    /** From usage stats when the user granted usage access; 0 means no recorded use. */
+    val lastUsedAt: Long = 0L,
 ) {
     val isUserApp: Boolean get() = !isSystem
     val removedForUser: Boolean get() = !installedForUser

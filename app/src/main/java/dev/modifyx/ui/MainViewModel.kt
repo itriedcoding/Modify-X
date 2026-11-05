@@ -11,11 +11,14 @@ import dev.modifyx.container
 import dev.modifyx.core.BootProfileReceiver
 import dev.modifyx.core.PrivilegeManager
 import dev.modifyx.core.ShizukuInstaller
+import dev.modifyx.core.UpdateChecker
 import dev.modifyx.data.AppEntry
 import dev.modifyx.data.AppFilter
 import dev.modifyx.data.AppSettings
 import dev.modifyx.data.AppSnapshot
 import dev.modifyx.data.ComponentRow
+import dev.modifyx.data.CustomTheme
+import dev.modifyx.data.UsageAccess
 import dev.modifyx.data.StandbyBucket
 import dev.modifyx.data.BackupDocument
 import dev.modifyx.data.BackupManager
@@ -27,6 +30,7 @@ import dev.modifyx.data.RiskLevel
 import dev.modifyx.data.SnapshotFile
 import dev.modifyx.data.SortMode
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +44,17 @@ data class ConsoleState(
     val output: String = "",
     val exitCode: Int? = null,
     val durationMs: Long = 0L,
+)
+
+private const val UNUSED_WINDOW_MS = 60L * 24 * 60 * 60 * 1000
+
+data class UpdateState(
+    val currentVersion: String = "",
+    val checking: Boolean = false,
+    val available: UpdateChecker.UpdateInfo? = null,
+    val downloading: Boolean = false,
+    val progress: Int = 0,
+    val message: String? = null,
 )
 
 data class ImportPreview(
@@ -101,6 +116,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var standby by mutableStateOf<StandbyBucket?>(null)
         private set
 
+    var update by mutableStateOf(UpdateState())
+        private set
+    var usageAccessGranted by mutableStateOf(false)
+        private set
+
     init {
         viewModelScope.launch {
             container.history.ensureLoaded()
@@ -109,6 +129,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             refreshSnapshots()
         }
         refresh()
+        refreshUsageAccess()
+        viewModelScope.launch {
+            val stored = container.settings.settings.first()
+            val stale = System.currentTimeMillis() - stored.lastUpdateCheck > 12 * 60 * 60 * 1000L
+            if (stored.autoUpdateCheck && stale) checkForUpdates()
+        }
     }
 
     // --- loading ---
@@ -177,6 +203,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             AppFilter.BLOAT -> sequence.filter { BloatCatalog.find(it.packageName) != null }
             AppFilter.REMOVED -> sequence.filter { it.removedForUser }
             AppFilter.DISABLED -> sequence.filter { it.disabled }
+            AppFilter.UNUSED -> if (!usageAccessGranted) {
+                emptySequence()
+            } else {
+                val cutoff = System.currentTimeMillis() - UNUSED_WINDOW_MS
+                sequence.filter { it.installedForUser && (it.lastUsedAt == 0L || it.lastUsedAt < cutoff) }
+            }
         }
         if (settings.showCatalogOnly) {
             sequence = sequence.filter { BloatCatalog.find(it.packageName) != null }
@@ -409,6 +441,80 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { container.settings.setAutoApplyProfile(id) }
     }
 
+    // --- usage stats, updates and APK export ---
+
+    fun refreshUsageAccess() {
+        usageAccessGranted = UsageAccess.hasAccess(getApplication())
+    }
+
+    fun openUsageAccessSettings() {
+        UsageAccess.openSettings(getApplication())
+    }
+
+    fun exportApk(pkg: String) {
+        viewModelScope.launch {
+            val result = container.exporter.export(pkg)
+            notice = result.message
+        }
+    }
+
+    fun currentVersionName(): String = runCatching {
+        getApplication<Application>().packageManager
+            .getPackageInfo(getApplication<Application>().packageName, 0).versionName
+    }.getOrNull() ?: ""
+
+    fun checkForUpdates(notify: Boolean = false) {
+        if (update.checking || update.downloading) return
+        viewModelScope.launch {
+            val current = currentVersionName()
+            update = update.copy(currentVersion = current, checking = true, message = null)
+            val result = runCatching { UpdateChecker.latest() }
+            val info = result.getOrNull()
+            update = when {
+                result.isFailure -> UpdateState(
+                    currentVersion = current,
+                    message = "Update check failed: ${result.exceptionOrNull()?.message ?: "network error"}",
+                )
+                info == null -> UpdateState(currentVersion = current, message = "The release page could not be read.")
+                UpdateChecker.isNewer(info.version, current) -> UpdateState(
+                    currentVersion = current,
+                    available = info,
+                    message = "Version ${info.version} is available.",
+                )
+                else -> UpdateState(currentVersion = current, message = "Modify-X $current is the newest release.")
+            }
+            container.settings.setLastUpdateCheck(System.currentTimeMillis())
+            if (notify) notice = update.message
+        }
+    }
+
+    fun downloadAndInstallUpdate() {
+        val info = update.available ?: return
+        if (update.downloading) return
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            update = update.copy(downloading = true, progress = 0, message = null)
+            val file = runCatching {
+                UpdateChecker.download(app, info) { percent -> update = update.copy(progress = percent) }
+            }.getOrElse { error ->
+                update = update.copy(downloading = false, message = "Download failed: ${error.message}")
+                return@launch
+            }
+            val problem = UpdateChecker.verify(app, file, currentVersionName())
+            if (problem != null) {
+                update = update.copy(downloading = false, message = "Update rejected: $problem")
+                return@launch
+            }
+            val result = UpdateChecker.install(app, file)
+            update = update.copy(
+                downloading = false,
+                available = if (result.installed) null else info,
+                message = result.message,
+            )
+            notice = result.message
+        }
+    }
+
     /** Queues the automation run now instead of waiting for the next reboot. */
     fun runAutomationNow() {
         BootProfileReceiver.enqueue(getApplication(), delaySeconds = 0L)
@@ -425,6 +531,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setAllowProtected(value: Boolean) = viewModelScope.launch { container.settings.setAllowProtected(value) }
     fun setConfirmDestructive(value: Boolean) = viewModelScope.launch { container.settings.setConfirmDestructive(value) }
     fun setCatalogOnly(value: Boolean) = viewModelScope.launch { container.settings.setCatalogOnly(value) }
+    fun setThemeId(id: String) = viewModelScope.launch { container.settings.setThemeId(id) }
+    fun setAmoled(value: Boolean) = viewModelScope.launch { container.settings.setAmoled(value) }
+    fun setAutoUpdateCheck(value: Boolean) = viewModelScope.launch { container.settings.setAutoUpdateCheck(value) }
+
+    fun saveCustomTheme(name: String, seed: Long) {
+        viewModelScope.launch {
+            val theme: CustomTheme = CustomTheme.create(name, seed)
+            container.settings.saveCustomTheme(theme)
+            notice = "Theme \"${theme.name}\" saved and applied."
+        }
+    }
+
+    fun deleteCustomTheme(id: String) = viewModelScope.launch { container.settings.deleteCustomTheme(id) }
 
     // --- backups ---
 

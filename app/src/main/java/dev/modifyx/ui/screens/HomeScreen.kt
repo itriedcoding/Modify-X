@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -89,6 +90,29 @@ fun HomeScreen(
                 onDetect = vm::detectPrivileges,
                 onDismissMessage = vm::dismissShizukuMessage,
             )
+        }
+
+        val update = vm.update.available
+        if (update != null) {
+            SectionCard(
+                title = "Update available \u00b7 ${update.version}",
+                subtitle = update.notes.lineSequence().firstOrNull { it.isNotBlank() }?.take(140),
+            ) {
+                Button(
+                    onClick = vm::downloadAndInstallUpdate,
+                    enabled = !vm.update.downloading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (vm.update.downloading) "Downloading ${vm.update.progress}%" else "Download & install")
+                }
+                if (vm.update.downloading) {
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { vm.update.progress / 100f },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
         }
 
         SectionCard(title = "Device overview") {
