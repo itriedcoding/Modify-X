@@ -1,35 +1,39 @@
-# Modify-X 1.2.0
+# Modify-X 1.3.0
 
-Custom themes, in-app updates, APK export and unused-app detection.
+Shizuku is gone. The privileged path is now implemented inside Modify-X.
 
-## New in 1.2.0
+## New in 1.3.0
 
-- **Create your own themes.** Pick a hue and saturation in Settings → Theme; the app
-  derives a complete Material 3 colour scheme from that seed, including containers,
-  secondary/tertiary tones, surfaces and outline. Themes can be renamed, switched and
-  deleted, and work with System/Light/Dark plus a new AMOLED-black surface toggle.
-- **Updates from the release page.** Settings → Updates checks
-  `github.com/itriedcoding/Modify-X/releases`, shows the published notes, downloads the
-  APK and installs it. A download is only accepted when it is signed with the project's
-  release key and is newer than the installed build, so a tampered file cannot take over
-  the app. Checks run at most daily and can be disabled. This is the app's only network
-  request.
-- **Export APK.** In an app's detail screen, copy its base APK and splits to
-  `Download/Modify-X` before removing it, with the copied size read back to confirm.
-- **Unused apps.** With usage access granted, the Unused filter lists apps you have not
-  opened in 60 days, and the detail screen shows a real last-used time. Without access
-  the app says so instead of guessing.
-- **Fewer footguns.** A stalled silent Shizuku install now falls back to the system
-  installer.
+- **Built-in ADB bridge.** The app now contains its own ADB host client: packet framing,
+  RSA-2048 key generation, token signing and real `shell:` streams to the phone's own
+  adbd. No Shizuku install, no third-party privilege app, no extra permission.
+  Enable USB debugging, run `adb tcpip 5555` from a computer once, then connect from the
+  Home tab and approve the fingerprint adbd shows (the same value is displayed in the app).
+- **Root still works** exactly as before, and is preferred when available.
+- **Honest states.** The Home card reports whether root or the bridge is active, keeps the
+  last connection error verbatim, allows the port to be changed, and can disconnect and
+  reconnect without restarting the app.
+- **Reconnect on launch** (optional) so the bridge comes back by itself after the first
+  successful authorisation.
+- Removed: the bundled Shizuku APK, the Shizuku provider, the privilege permission, the
+  AIDL user service and the Shizuku dependency. The app is smaller and has fewer
+  moving parts.
+
+## Limitations worth knowing
+
+- `adb tcpip` is reset by a reboot, so the bridge needs USB debugging kept on and the
+  command re-run after a restart (root users are unaffected).
+- Android 11+ wireless-debugging pairing (the six-digit code) is not implemented; it
+  requires SPAKE2 key exchange, which is outside this protocol subset. The bridge uses the
+  classic TCP handshake instead.
 
 ## Install
 
-Download `app-release.apk`. Root (Magisk, KernelSU) or Shizuku is required for any
-package change; without either the app is read-only.
+Download `app-release.apk`. Root or the ADB bridge is required for any package change;
+without either the app is read-only.
 
 ## Notes
 
 - Uninstall uses `pm uninstall --user 0`, so packages can be restored from History.
-- Backups contain package names and states only.
-- The release keystore is committed on purpose: every build is signed with the same key
-  so updates install over each other and the in-app updater can verify them.
+- The release keystore is committed on purpose so updates install over each other and the
+  in-app updater can verify them.

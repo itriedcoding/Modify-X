@@ -148,7 +148,7 @@ fun AppDetailScreen(
         if (!privileges.canModify) {
             SectionCard(title = "Read-only mode") {
                 Text(
-                    "No privileged shell is available, so actions are disabled. Set up root or Shizuku from the Home tab.",
+                    "No privileged shell is available, so actions are disabled. Set up root or the ADB bridge from the Home tab.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -346,7 +346,7 @@ fun AppDetailScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         vm.standby?.let { "${it.label} — ${it.blurb}" }
-                            ?: if (privileges.canModify) "Reading the bucket…" else "Needs root or Shizuku.",
+                            ?: if (privileges.canModify) "Reading the bucket…" else "Needs root or the ADB bridge.",
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.weight(1f),
                     )

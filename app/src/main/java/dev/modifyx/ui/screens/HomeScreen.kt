@@ -35,7 +35,6 @@ import dev.modifyx.data.DebloatAction
 import dev.modifyx.ui.MainViewModel
 import dev.modifyx.ui.components.PrivilegeCard
 import dev.modifyx.ui.components.SectionCard
-import dev.modifyx.ui.components.ShizukuSetupCard
 import dev.modifyx.ui.components.StatTile
 import dev.modifyx.ui.formatAgo
 import dev.modifyx.ui.formatBytes
@@ -75,22 +74,13 @@ fun HomeScreen(
 
         PrivilegeCard(
             state = privileges,
+            adbBusy = vm.adbBusy,
+            adbMessage = vm.adbMessage,
             onDetect = vm::detectPrivileges,
-            onRequestShizuku = vm::requestShizukuPermission,
+            onConnectAdb = vm::connectAdb,
+            onDisconnectAdb = vm::disconnectAdb,
+            onDismissMessage = vm::dismissAdbMessage,
         )
-
-        if (!privileges.shizukuGranted) {
-            ShizukuSetupCard(
-                state = privileges,
-                busy = vm.shizukuInstallBusy,
-                message = vm.shizukuMessage,
-                onInstall = vm::installShizuku,
-                onOpen = vm::openShizuku,
-                onGrant = vm::requestShizukuPermission,
-                onDetect = vm::detectPrivileges,
-                onDismissMessage = vm::dismissShizukuMessage,
-            )
-        }
 
         val update = vm.update.available
         if (update != null) {
@@ -139,7 +129,7 @@ fun HomeScreen(
 
         SectionCard(
             title = "Debloat",
-            subtitle = "Package changes require root or Shizuku. Nothing is sent off the device.",
+            subtitle = "Package changes require root or the ADB bridge. Nothing is sent off the device.",
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onOpenApps, modifier = Modifier.weight(1f)) { Text("All apps") }

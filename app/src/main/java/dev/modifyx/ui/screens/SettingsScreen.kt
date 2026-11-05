@@ -281,13 +281,19 @@ fun SettingsScreen(
             OutlinedButton(onClick = vm::detectPrivileges, modifier = Modifier.fillMaxWidth()) {
                 Text("Re-detect privileges (${privileges.summary})")
             }
+            ToggleRow(
+                title = "Reconnect ADB on launch",
+                subtitle = "Try adbd on port ${settings.adbPort} when the app starts",
+                checked = settings.adbAutoConnect,
+                onCheckedChange = vm::setAdbAutoConnect,
+            )
         }
 
         SectionCard(title = "About") {
             Text("Modify-X $version", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(6.dp))
             Text(
-                "A local debloater. Package changes go through root or a Shizuku-provided shell and every " +
+                "A local debloater. Package changes go through root or the built-in ADB bridge and every " +
                     "result is read back from the platform. The only network request is reading this project's " +
                     "public GitHub release page for updates.",
                 style = MaterialTheme.typography.bodySmall,

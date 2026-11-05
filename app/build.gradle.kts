@@ -14,8 +14,8 @@ android {
         applicationId = "dev.modifyx"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2.0"
+        versionCode = 5
+        versionName = "1.3.0"
         resourceConfigurations += listOf("en")
         vectorDrawables.useSupportLibrary = true
     }
@@ -37,7 +37,7 @@ android {
     buildTypes {
         release {
             // Keep R8 out of the picture: the app talks to platform services through
-            // reflection (Shizuku) and a stripped build must not risk silent breakage.
+            // reflection (ADB client, platform services) and a stripped build must not risk silent breakage.
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -56,7 +56,6 @@ android {
 
     buildFeatures {
         compose = true
-        aidl = true
     }
 
     packaging {
@@ -100,10 +99,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core:1.7.8")
-
-    // Shizuku: privileged shell access without root.
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

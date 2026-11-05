@@ -3,49 +3,56 @@
 An Android debloater that shows you exactly what it is doing, executes real platform
 commands, and verifies that each change actually happened.
 
-No accounts, no ads, no analytics, no fake data. The only network request the app ever
-makes is reading this project's own GitHub release page to offer an update.
+No accounts, no ads, no analytics, no third-party privilege app, no fake data. The only
+network request the app makes is reading this project's own GitHub release page.
 
 ## What it does
 
-Modify-X removes, disables and restores packages on **your own device** through a
-privileged shell. Two backends are supported:
+Modify-X changes packages on **your own device** through a privileged shell. It has two
+backends, both implemented in this repository:
 
 | Backend | How it works | Requirements |
 | --- | --- | --- |
 | **Root** | Runs `su -c <command>` as UID 0 | A rooted device with a working `su` |
-| **Shizuku** | Runs commands as the `shell` user, exactly like `adb shell` | [Shizuku](https://shizuku.rikka.app/) installed and running, permission granted |
+| **ADB bridge** | Talks the ADB wire protocol to the phone's own `adbd` and runs `shell:` services as the shell user | USB debugging enabled, `adb tcpip 5555` run once from a computer |
 
-Without one of those, the app runs read-only: it can still list, search and inspect
-every installed package, but it refuses to touch anything instead of pretending.
+Without either, the app runs read-only: it can still list, search and inspect every
+installed package, but it refuses to touch anything instead of pretending.
 
-## Shizuku setup without a browser
+## The ADB bridge
 
-The official **Shizuku 13.6.0** APK is bundled inside Modify-X, so setup needs no
-network access and no third-party store:
+Shizuku is not used and not required. Modify-X contains its own ADB host client:
 
-- Home offers **Install Shizuku** whenever Shizuku is missing.
-- Before installing, the APK must match its pinned SHA-256 **and** the Rikka release
-  signing certificate; anything else is refused.
-- With root the install runs silently (`pm install`); without root the system installer
-  opens with one confirmation. If a silent install stalls, the installer is offered
-  anyway instead of leaving a dead end.
-- A unit test fails the build if the bundled asset ever changes.
+- **Protocol** — `AdbProtocol` encodes and decodes ADB's 24-byte packets (CNXN, AUTH,
+  OPEN, OKAY, WRTE, CLSE) with the real framing, checksum and magic fields.
+- **Authentication** — the app generates an RSA-2048 key on first use, stores it in its
+  private files directory, and signs adbd's 20-byte token with PKCS#1 v1.5 SHA-1, exactly
+  as the `adb` client does. adbd shows its fingerprint prompt once; the fingerprint is
+  displayed in the app so you can compare it before allowing.
+- **Execution** — commands run through a real `shell:` service on the `shell` UID, with
+  the exit status carried back in the stream and verified like every other action.
+- **Recovery** — the port is configurable, the connection can be re-established from the
+  Home tab, and the last failure is shown verbatim instead of being swallowed.
 
-See [THIRD_PARTY.md](THIRD_PARTY.md) for provenance and the Apache-2.0 attribution.
+One-time setup: enable Developer options → USB debugging, connect the phone to a computer
+and run `adb tcpip 5555`, then tap Connect in Modify-X. `adb tcpip` resets on reboot, so
+the phone needs USB debugging still enabled; the app reconnects on launch when the port is
+reachable. Wireless-debugging *pairing* (the Android 11+ six-digit flow) is not
+implemented, because it needs a SPAKE2 exchange that is outside this protocol subset.
 
 ## Updates
 
 Settings → Updates follows `github.com/itriedcoding/Modify-X/releases` and installs a
 newer build in place:
 
-- The version is read from the GitHub release API, with the plain `/releases/latest`
+- The version comes from the GitHub release API, with the plain `/releases/latest`
   redirect as a fallback that needs no API quota.
 - The downloaded APK is accepted **only** if it is signed with the project's release key
   and carries a higher version than the installed app. Anything else is rejected before
   the installer is involved.
-- With root or Shizuku the update installs silently; otherwise the system installer opens.
-- Automatic checks run at most once a day, and can be turned off.
+- With root or the ADB bridge the update installs silently; otherwise the system
+  installer opens.
+- Automatic checks run at most once a day and can be turned off.
 
 ## Themes
 
@@ -120,13 +127,12 @@ undo, or use a backup to restore.
 | --- | --- |
 | `QUERY_ALL_PACKAGES` | Listing the full package inventory is the point of the app |
 | `RECEIVE_BOOT_COMPLETED` | Re-applying the automation profile after a reboot |
-| `REQUEST_INSTALL_PACKAGES` | Installing Shizuku and app updates |
+| `REQUEST_INSTALL_PACKAGES` | Installing app updates |
 | `INTERNET` | Reading the public GitHub release page for updates |
-| `moe.shizuku.manager.permission.API_V23` | Talking to a running Shizuku service |
 
 `WAKE_LOCK` and `FOREGROUND_SERVICE` are contributed by WorkManager so deferred work can
 finish. Usage access is optional and granted in system settings; without it the Unused
-filter simply reports that it is unavailable.
+filter reports that it is unavailable. No privilege-app permission is requested.
 
 ## Building
 
@@ -149,10 +155,9 @@ your own distribution.
 
 ```
 app/src/main/java/dev/modifyx/
-├── core/       privilege detection, shells, Shizuku installer, update checker, worker
+├── core/       privilege detection, ADB client and protocol, shells, update checker, worker
 ├── data/       package repository, catalog, actions, controls, themes, usage, backups
 └── ui/         Compose theme/palette, view model, screens
-app/src/main/assets/shizuku.apk   bundled, checksum-pinned Shizuku release
 ```
 
 The data layer never fabricates values: if the platform cannot supply something (for
@@ -161,5 +166,4 @@ instead of showing a placeholder.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Bundled Shizuku is Apache-2.0; see
-[THIRD_PARTY.md](THIRD_PARTY.md).
+MIT. See [LICENSE](LICENSE).

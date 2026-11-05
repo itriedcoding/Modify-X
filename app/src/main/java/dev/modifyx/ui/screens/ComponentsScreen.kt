@@ -105,7 +105,7 @@ fun ComponentsScreen(
             if (!privileges.canModify) {
                 SectionCard(title = "Read-only mode") {
                     Text(
-                        "Changing components needs root or Shizuku. Counts below still come from the real manifest.",
+                        "Changing components needs root or the ADB bridge. Counts below still come from the real manifest.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }

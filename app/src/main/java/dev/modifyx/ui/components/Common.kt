@@ -13,6 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,7 +45,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Button
 import dev.modifyx.core.PrivilegeMode
 import dev.modifyx.core.PrivilegeState
-import dev.modifyx.core.ShizukuInstaller
 import dev.modifyx.data.PackageRepository
 import dev.modifyx.data.RiskLevel
 import kotlinx.coroutines.Dispatchers
@@ -187,33 +191,34 @@ fun KeyValueRow(label: String, value: String, monospace: Boolean = false) {
 @Composable
 fun PrivilegeCard(
     state: PrivilegeState,
+    adbBusy: Boolean,
+    adbMessage: String?,
     onDetect: () -> Unit,
-    onRequestShizuku: () -> Unit,
+    onConnectAdb: (Int) -> Unit,
+    onDisconnectAdb: () -> Unit,
+    onDismissMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var port by remember(state.adbPort) { mutableStateOf(state.adbPort.toString()) }
     val container = when (state.mode) {
-        PrivilegeMode.ROOT, PrivilegeMode.SHIZUKU -> MaterialTheme.colorScheme.primaryContainer
+        PrivilegeMode.ROOT, PrivilegeMode.ADB -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
     val content = when (state.mode) {
-        PrivilegeMode.ROOT, PrivilegeMode.SHIZUKU -> MaterialTheme.colorScheme.onPrimaryContainer
+        PrivilegeMode.ROOT, PrivilegeMode.ADB -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = container)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        state.summary,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = content,
-                    )
+                    Text(state.summary, style = MaterialTheme.typography.titleMedium, color = content)
                     Text(
                         when (state.mode) {
                             PrivilegeMode.ROOT -> "su binary: ${state.suBinary ?: "detected"}. Commands run as UID 0."
-                            PrivilegeMode.SHIZUKU -> "Shizuku v${state.shizukuVersion} is serving an adb-level shell."
-                            PrivilegeMode.LOCAL -> "Without root or Shizuku this app cannot change packages. It can still inspect them."
-                            PrivilegeMode.NONE -> "Probing for root and Shizuku…"
+                            PrivilegeMode.ADB -> "adbd is serving the shell user on port ${state.adbPort}."
+                            PrivilegeMode.LOCAL -> "Without root or the ADB bridge this app cannot change packages. It can still inspect them."
+                            PrivilegeMode.NONE -> "Probing for root and adbd…"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = content.copy(alpha = 0.8f),
@@ -223,102 +228,62 @@ fun PrivilegeCard(
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 }
             }
+
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onDetect, enabled = !state.detecting) { Text("Re-detect") }
-                if (!state.shizukuGranted && state.shizukuRunning) {
-                    FilledTonalButton(onClick = onRequestShizuku) { Text("Grant Shizuku") }
+                if (state.adbConnected) {
+                    OutlinedButton(onClick = onDisconnectAdb) { Text("Disconnect ADB") }
                 }
             }
-            if (state.mode == PrivilegeMode.LOCAL) {
-                Spacer(Modifier.height(8.dp))
+
+            if (state.mode != PrivilegeMode.ROOT) {
+                Spacer(Modifier.height(14.dp))
+                Text("ADB bridge", style = MaterialTheme.typography.titleSmall, color = content)
                 Text(
-                    buildString {
-                        append("Root: not found. ")
-                        append(if (state.shizukuInstalled) "Shizuku is installed but not running or not granted." else "Shizuku is not installed.")
-                    },
+                    "Modify-X speaks the ADB protocol to this phone's own adbd, so no other app is involved. " +
+                        "Enable USB debugging, run adb tcpip ${state.adbPort} from a computer once, then connect here. " +
+                        "adbd shows a key fingerprint prompt: compare it with the value below and allow it.",
                     style = MaterialTheme.typography.bodySmall,
                     color = content.copy(alpha = 0.8f),
                 )
-                state.lastError?.let {
-                    Spacer(Modifier.height(4.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = content.copy(alpha = 0.7f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ShizukuSetupCard(
-    state: PrivilegeState,
-    busy: Boolean,
-    message: String?,
-    onInstall: () -> Unit,
-    onOpen: () -> Unit,
-    onGrant: () -> Unit,
-    onDetect: () -> Unit,
-    onDismissMessage: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    SectionCard(title = "Shizuku", modifier = modifier) {
-        when {
-            !state.shizukuInstalled -> {
-                Text(
-                    "Shizuku provides an adb-level shell without root. Modify-X bundles Shizuku " +
-                        "${ShizukuInstaller.VERSION} (Apache-2.0), so your phone never downloads it.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
                 Spacer(Modifier.height(10.dp))
-                Button(onClick = onInstall, enabled = !busy) {
-                    Text(if (busy) "Installing…" else "Install Shizuku")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = port,
+                        onValueChange = { typed -> port = typed.filter { it.isDigit() }.take(5) },
+                        label = { Text("Port") },
+                        singleLine = true,
+                        modifier = Modifier.width(130.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { onConnectAdb(port.toIntOrNull() ?: 5555) },
+                        enabled = !adbBusy,
+                    ) {
+                        Text(if (adbBusy) "Connecting…" else if (state.adbConnected) "Reconnect" else "Connect")
+                    }
                 }
-                if (busy) {
+                if (state.adbKeyFingerprint.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Text(
+                        "Key ${state.adbKeyFingerprint}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = content.copy(alpha = 0.75f),
+                    )
+                }
+                state.adbError?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = content.copy(alpha = 0.9f))
+                }
+                adbMessage?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = content.copy(alpha = 0.9f))
+                    TextButton(onClick = onDismissMessage) { Text("Dismiss") }
                 }
             }
-
-            !state.shizukuRunning -> {
-                Text(
-                    "Shizuku ${state.shizukuVersion ?: ""} is installed, but its service is not running. " +
-                        "Open Shizuku and start it with root or wireless debugging, then re-detect.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onOpen) { Text("Open Shizuku") }
-                    OutlinedButton(onClick = onDetect) { Text("Re-detect") }
-                }
-            }
-
-            !state.shizukuGranted -> {
-                Text(
-                    "Shizuku is running. Grant access so Modify-X can use its shell.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Spacer(Modifier.height(10.dp))
-                Button(onClick = onGrant) { Text("Grant access") }
-            }
-
-            else -> Text(
-                "Shizuku is connected and serving commands.",
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
-
-        if (message != null) {
-            Spacer(Modifier.height(10.dp))
-            Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(onClick = onDismissMessage) { Text("Dismiss") }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "The bundled APK must match its pinned checksum and Rikka's signing certificate before it is installed.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

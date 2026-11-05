@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -49,6 +50,8 @@ data class AppSettings(
     val amoled: Boolean = false,
     val autoUpdateCheck: Boolean = true,
     val lastUpdateCheck: Long = 0L,
+    val adbPort: Int = 5555,
+    val adbAutoConnect: Boolean = true,
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "modifyx_settings")
@@ -71,6 +74,8 @@ class SettingsStore(private val context: Context) {
         val amoled = booleanPreferencesKey("amoled")
         val autoUpdateCheck = booleanPreferencesKey("auto_update_check")
         val lastUpdateCheck = longPreferencesKey("last_update_check")
+        val adbPort = intPreferencesKey("adb_port")
+        val adbAutoConnect = booleanPreferencesKey("adb_auto_connect")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data
@@ -92,6 +97,8 @@ class SettingsStore(private val context: Context) {
                 amoled = prefs[Keys.amoled] ?: false,
                 autoUpdateCheck = prefs[Keys.autoUpdateCheck] ?: true,
                 lastUpdateCheck = prefs[Keys.lastUpdateCheck] ?: 0L,
+                adbPort = prefs[Keys.adbPort] ?: 5555,
+                adbAutoConnect = prefs[Keys.adbAutoConnect] ?: true,
             )
         }
 
@@ -108,6 +115,8 @@ class SettingsStore(private val context: Context) {
     suspend fun setAmoled(enabled: Boolean) = edit { it[Keys.amoled] = enabled }
     suspend fun setAutoUpdateCheck(enabled: Boolean) = edit { it[Keys.autoUpdateCheck] = enabled }
     suspend fun setLastUpdateCheck(timestamp: Long) = edit { it[Keys.lastUpdateCheck] = timestamp }
+    suspend fun setAdbPort(port: Int) = edit { it[Keys.adbPort] = port.coerceIn(1, 65_535) }
+    suspend fun setAdbAutoConnect(enabled: Boolean) = edit { it[Keys.adbAutoConnect] = enabled }
 
     suspend fun setAutoApplyProfile(id: String?) = edit { prefs ->
         if (id == null) prefs.remove(Keys.autoApplyProfile) else prefs[Keys.autoApplyProfile] = id

@@ -1,7 +1,7 @@
 package dev.modifyx.core
 
 /** Which privilege backend produced a command result. */
-enum class ShellKind { ROOT, SHIZUKU, LOCAL }
+enum class ShellKind { ROOT, ADB, LOCAL }
 
 /**
  * Outcome of one shell command. [stderr] is normally empty because both streams are

@@ -19,7 +19,7 @@ class ActionEngine {
                 action = action,
                 success = false,
                 verified = false,
-                message = "No root or Shizuku shell: nothing was executed.",
+                message = "No root or ADB bridge shell: nothing was executed.",
                 command = "",
                 output = "",
             )

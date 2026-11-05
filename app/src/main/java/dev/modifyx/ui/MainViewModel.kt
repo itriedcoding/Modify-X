@@ -10,7 +10,6 @@ import androidx.lifecycle.viewModelScope
 import dev.modifyx.container
 import dev.modifyx.core.BootProfileReceiver
 import dev.modifyx.core.PrivilegeManager
-import dev.modifyx.core.ShizukuInstaller
 import dev.modifyx.core.UpdateChecker
 import dev.modifyx.data.AppEntry
 import dev.modifyx.data.AppFilter
@@ -101,9 +100,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var console by mutableStateOf(ConsoleState())
         private set
 
-    var shizukuInstallBusy by mutableStateOf(false)
+    var adbBusy by mutableStateOf(false)
         private set
-    var shizukuMessage by mutableStateOf<String?>(null)
+    var adbMessage by mutableStateOf<String?>(null)
         private set
 
     var components by mutableStateOf<List<ComponentRow>>(emptyList())
@@ -132,6 +131,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         refreshUsageAccess()
         viewModelScope.launch {
             val stored = container.settings.settings.first()
+            PrivilegeManager.setAdbPort(stored.adbPort)
+            if (stored.adbAutoConnect) PrivilegeManager.refresh()
             val stale = System.currentTimeMillis() - stored.lastUpdateCheck > 12 * 60 * 60 * 1000L
             if (stored.autoUpdateCheck && stale) checkForUpdates()
         }
@@ -153,34 +154,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { PrivilegeManager.refresh() }
     }
 
-    fun requestShizukuPermission() {
-        if (!PrivilegeManager.requestShizukuPermission()) {
-            notice = "Shizuku is not running. Start the Shizuku service, then re-detect."
-        }
-    }
-
-    // --- Shizuku setup ---
-
-    fun installShizuku() {
-        if (shizukuInstallBusy) return
+    fun connectAdb(port: Int) {
+        if (adbBusy) return
         viewModelScope.launch {
-            shizukuInstallBusy = true
-            val result = ShizukuInstaller.install(getApplication())
-            shizukuInstallBusy = false
-            shizukuMessage = result.message
-            PrivilegeManager.refresh()
+            adbBusy = true
+            val error = PrivilegeManager.connectAdb(port)
+            container.settings.setAdbPort(port)
+            adbBusy = false
+            adbMessage = error ?: "Connected to adbd on port $port as the shell user."
         }
     }
 
-    fun openShizuku() {
-        if (!ShizukuInstaller.open(getApplication())) {
-            shizukuMessage = "Shizuku is not installed yet, so there is nothing to open."
-        }
+    fun disconnectAdb() {
+        PrivilegeManager.disconnectAdb()
+        adbMessage = "Disconnected from adbd."
     }
 
-    fun dismissShizukuMessage() {
-        shizukuMessage = null
+    fun dismissAdbMessage() {
+        adbMessage = null
     }
+
+    fun setAdbAutoConnect(value: Boolean) = viewModelScope.launch { container.settings.setAdbAutoConnect(value) }
 
     private suspend fun reloadAfterChange() {
         snapshot = container.repository.loadSnapshot()

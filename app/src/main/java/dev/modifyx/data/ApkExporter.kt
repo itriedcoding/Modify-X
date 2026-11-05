@@ -6,7 +6,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Copies an installed package's APKs to Download/Modify-X before the user removes it.
- * Only the shell can read /data/app, so this needs root or Shizuku.
+ * Only the shell can read /data/app, so this needs root or the ADB bridge.
  */
 class ApkExporter {
 
@@ -18,7 +18,7 @@ class ApkExporter {
 
     suspend fun export(pkg: String): Result = withContext(Dispatchers.IO) {
         if (!PrivilegeManager.canModify()) {
-            return@withContext Result(false, "Exporting APKs needs root or Shizuku; nothing was copied.")
+            return@withContext Result(false, "Exporting APKs needs root or the ADB bridge; nothing was copied.")
         }
 
         val shell = PrivilegeManager.shell()

@@ -160,7 +160,7 @@ fun ProfilesScreen(vm: MainViewModel) {
 
         SectionCard(
             title = "Automation",
-            subtitle = "Re-apply a profile after every boot. Requires root or Shizuku to be available at boot.",
+            subtitle = "Re-apply a profile after every boot. Requires root or the ADB bridge to be available at boot.",
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
