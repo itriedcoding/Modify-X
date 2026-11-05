@@ -14,19 +14,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
+        id: jdk
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
+        id: sdk
         uses: android-actions/setup-android@v3
 
       - name: Install SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" > /dev/null
+        id: packages
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          ls "$ANDROID_HOME/platforms"
 
       - name: Resolve version
         id: version
@@ -34,12 +41,15 @@ jobs:
           VERSION=$(grep -m1 'versionName = "' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
           test -n "$VERSION"
           echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "resolved version: $VERSION"
 
       - name: Unit tests and release build
         id: build
         run: ./gradlew :app:testReleaseUnitTest :app:assembleRelease --no-daemon --stacktrace 2>&1 | tee ci-build.log
 
       - name: Upload APK artifact
+        id: artifact
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: modifyx-apk
@@ -48,14 +58,13 @@ jobs:
 
       - name: Publish GitHub release
         id: release
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && steps.build.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -x
-          gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions' || true
           TAG="v${{ steps.version.outputs.name }}"
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          echo "publishing $TAG from $APK"
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release upload "$TAG" "$APK" --clobber
           else
@@ -71,11 +80,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
+            echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "ref: $GITHUB_REF"
             echo "event: $GITHUB_EVENT_NAME"
+            echo "sha: $GITHUB_SHA"
             echo
-            echo "=== token permissions ==="
-            gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions' 2>&1 || true
+            echo "step outcomes:"
+            echo "  checkout=${{ steps.checkout.outcome }}"
+            echo "  jdk=${{ steps.jdk.outcome }}"
+            echo "  sdk=${{ steps.sdk.outcome }}"
+            echo "  packages=${{ steps.packages.outcome }}"
+            echo "  version=${{ steps.version.outcome }}"
+            echo "  build=${{ steps.build.outcome }}"
+            echo "  artifact=${{ steps.artifact.outcome }}"
+            echo "  release=${{ steps.release.outcome }}"
+            echo
+            echo "sdk: ${ANDROID_HOME:-unset}"
             echo
             echo "=== build log tail ==="
             tail -c 40000 ci-build.log 2>/dev/null || echo "no build log"
