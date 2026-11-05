@@ -1,0 +1,19 @@
+run: https://github.com/itriedcoding/Modify-X/actions/runs/42022105970
+ref: refs/heads/main
+event: push
+sha: a03e52578729cca4a962c6b44e6863d60e2409f2
+
+step outcomes:
+  checkout=success
+  jdk=success
+  sdk=failure
+  packages=skipped
+  version=skipped
+  build=skipped
+  artifact=skipped
+  release=skipped
+
+sdk: /usr/local/lib/android/sdk
+
+=== build log tail ===
+no build log
